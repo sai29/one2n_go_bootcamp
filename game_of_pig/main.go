@@ -5,17 +5,63 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 )
 
 func main() {
 	args := os.Args[1:]
-	player1, _ := strconv.Atoi(args[0])
-	player2, _ := strconv.Atoi(args[1])
 
-	playGame(map[string]int{"player1": player1, "player2": player2, "noOfGames": 10})
+	if strings.Contains(args[1], "-") && strings.Contains(args[0], "-") {
+		player1StartHold, _ := strconv.Atoi(strings.Split(args[0], "-")[0])
+		player1EndHold, _ := strconv.Atoi(strings.Split(args[0], "-")[1])
+
+		player2StartHold, _ := strconv.Atoi(strings.Split(args[1], "-")[0])
+		player2EndHold, _ := strconv.Atoi(strings.Split(args[1], "-")[1])
+
+		for i := player1StartHold; i <= player1EndHold; i++ {
+			playerWins := map[string]int{"player1": 0, "player2": 0}
+			for j := player2StartHold; j <= player2EndHold; j++ {
+				if i == j {
+					continue
+				} else {
+					gameResult := playGame(map[string]int{"player1": i, "player2": j, "noOfGames": 10}, map[string]bool{"Print": false})
+					playerWins["player1"] += gameResult["player1"]
+					playerWins["player2"] += gameResult["player2"]
+
+				}
+
+			}
+			printGameResultForVariedHolds(i, playerWins)
+
+		}
+
+	} else if strings.Contains(args[1], "-") && !strings.Contains(args[0], "-") {
+		player1, _ := strconv.Atoi(args[0])
+		startHold, _ := strconv.Atoi(strings.Split(args[1], "-")[0])
+		endHold, _ := strconv.Atoi(strings.Split(args[1], "-")[1])
+		for i := startHold; i <= endHold; i++ {
+			if i == player1 {
+				continue
+			} else {
+				playGame(map[string]int{"player1": player1, "player2": i, "noOfGames": 10}, map[string]bool{"Print": true})
+			}
+		}
+	} else if !strings.Contains(args[1], "-") && !strings.Contains(args[0], "-") {
+		player1, _ := strconv.Atoi(args[0])
+		player2, _ := strconv.Atoi(args[1])
+		playGame(map[string]int{"player1": player1, "player2": player2, "noOfGames": 10}, map[string]bool{"Print": true})
+	}
 }
 
-func playGame(playerHolds map[string]int) {
+func printGameResultForVariedHolds(player1Hold int, playerWins map[string]int) {
+	player1WinPercentage := int32((float32(playerWins["player1"]) / 990.0) * 100.0)
+	player2WinPercentage := int32((float32(playerWins["player2"]) / 990.0) * 100.0)
+	fmt.Printf("Result: Wins, losses staying at k =  %v: %v/990 (%v percent), %v/990 (%v percent) \n", player1Hold, playerWins["player1"], player1WinPercentage,
+		playerWins["player2"], player2WinPercentage)
+
+}
+
+func playGame(playerHolds map[string]int, printResult map[string]bool) map[string]int {
 
 	cumulativePlayerScores := map[string]int{"player1": 0, "player2": 0}
 	playerWins := map[string]int{"player1": 0, "player2": 0}
@@ -48,11 +94,14 @@ func playGame(playerHolds map[string]int) {
 		currentTurnScore = 0
 		cumulativePlayerScores["player1"], cumulativePlayerScores["player2"] = 0, 0
 	}
-	printResult(playerWins, playerHolds)
-	// fmt.Println(playerWins)
+	if printResult["Print"] {
+		printPlayerWins(playerWins, playerHolds)
+	}
+
+	return playerWins
 }
 
-func printResult(playerWins, playerHolds map[string]int) {
+func printPlayerWins(playerWins, playerHolds map[string]int) {
 	player1WinPercentage := int32(float32(playerWins["player1"]) / float32(playerHolds["noOfGames"]) * 100.0)
 	player2WinPercentage := int32(float32(playerWins["player2"]) / float32(playerHolds["noOfGames"]) * 100.0)
 	fmt.Printf("Holding at %v vs Holding at %v: wins: %v/%v %v percent, losses: %v/%v %v percent \n", playerHolds["player1"], playerHolds["player2"],
