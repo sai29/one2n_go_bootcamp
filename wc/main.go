@@ -16,6 +16,8 @@ type WcFlags struct {
 	c bool
 }
 
+const openFileLimit = 10
+
 type fileCount struct {
 	flags               WcFlags
 	fileName            string
@@ -23,34 +25,11 @@ type fileCount struct {
 	errorCode           int
 }
 
-type AdvancedReader interface {
-	io.Reader
-	SetSource(source io.Reader)
-}
-
-type CustomReader struct {
-	reader io.Reader
-}
-
-func NewCustomReader(r io.Reader) *CustomReader {
-	return &CustomReader{
-		reader: r,
-	}
-}
-
-func (cr *CustomReader) Read(p []byte) (n int, err error) {
-	return cr.reader.Read(p)
-}
-
-func (cr *CustomReader) SetSource(source io.Reader) {
-	cr.reader = source
-}
-
 func main() {
 	os.Exit(run())
 }
 
-func NewWcFlags() WcFlags {
+func newWcFlags() WcFlags {
 	Wcflags := WcFlags{w: false, l: false, c: false}
 
 	if isFlagPassed("l") {
@@ -72,7 +51,7 @@ func NewWcFlags() WcFlags {
 	return Wcflags
 }
 
-func ParseFlags() {
+func parseFlags() {
 	flag.Bool("l", false, "for lines")
 	flag.Bool("w", false, "for words")
 	flag.Bool("c", false, "for chars")
@@ -81,8 +60,8 @@ func ParseFlags() {
 
 func run() int {
 
-	ParseFlags()
-	flags := NewWcFlags()
+	parseFlags()
+	flags := newWcFlags()
 
 	if len(os.Args) > 1 {
 		var wg sync.WaitGroup
@@ -106,10 +85,9 @@ func run() int {
 	} else {
 
 		count := map[string]int{"words": 0, "lines": 0, "chars": 0, "errorCode": 0}
-		customReader := NewCustomReader(os.Stdin)
-		count = readLineByLine(customReader, count, flags, map[string]bool{"file": false, "singleLine": false})
+		count = readLineByLine(os.Stdin, count, flags, map[string]bool{"file": false})
 
-		fmt.Println(count)
+		fmt.Println("\n", count)
 
 	}
 
@@ -147,26 +125,20 @@ func readFile(filePath string, flags WcFlags, wg *sync.WaitGroup, resultChan cha
 	}
 	defer file.Close()
 
-	customReader := NewCustomReader(file)
-
-	count = readLineByLine(customReader, count, flags, map[string]bool{"file": true, "singLine": false})
+	count = readLineByLine(file, count, flags, map[string]bool{"file": true})
 	resultChan <- count
 }
 
-func readLineByLine(customReader *CustomReader, count map[string]int, flags WcFlags, input map[string]bool) map[string]int {
-	reader := bufio.NewReader(customReader)
-	loop := 0
+func readLineByLine(reader io.Reader, count map[string]int, flags WcFlags, input map[string]bool) map[string]int {
+	buffReader := bufio.NewReader(reader)
 	for {
-		loop += 1
-		fmt.Printf("Count is %v\n", loop)
-		line, err := reader.ReadString('\n')
+		line, err := buffReader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				count["errorCode"] = 0
-				if !input["file"] && input["singleLine"] {
-					fmt.Printf("line is %v\n", line)
-					return countWLC(flags, count, line, input)
-				}
+				input["lastLine"] = true
+				return countWLC(flags, count, line, input)
+
 			} else {
 				fmt.Println(err)
 				count["errorCode"] = 126
@@ -189,7 +161,7 @@ func countWLC(flags WcFlags, count map[string]int, line string, input map[string
 		count["words"] += len(words)
 	}
 
-	if flags.l && !input["singleLine"] {
+	if flags.l && !input["lastLine"] {
 		count["lines"] += 1
 	}
 	return count
