@@ -1,12 +1,11 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"sync"
 )
 
@@ -19,15 +18,14 @@ type WcFlags struct {
 const openFileLimit = 10
 
 type fileCount struct {
-	flags               WcFlags
 	fileName            string
 	words, chars, lines int
-	errorCode           int
+	error               error
 }
 
-func main() {
-	os.Exit(run())
-}
+var (
+	lineCount, wordCount, charCount int
+)
 
 func newWcFlags() WcFlags {
 	Wcflags := WcFlags{w: false, l: false, c: false}
@@ -58,113 +56,166 @@ func parseFlags() {
 	flag.Parse()
 }
 
-func run() int {
+func main() {
 
 	parseFlags()
 	flags := newWcFlags()
 
-	if len(os.Args) > 1 {
-		var wg sync.WaitGroup
-		resultChan := make(chan map[string]int, len(flag.Args()))
+	args := flag.Args()
+	if len(os.Args) == 1 {
+		args = append(args, "-")
+	}
+	var wg sync.WaitGroup
+	maxOpenFileLimit := make(chan int, openFileLimit)
 
-		for _, v := range flag.Args() {
-			wg.Add(1)
-			filePath := v
-			go readFile(filePath, flags, &wg, resultChan)
-		}
-
-		go func() {
-			wg.Wait()
-			close(resultChan)
-		}()
-
-		for receivedMap := range resultChan {
-			fmt.Println("Received map:", receivedMap)
-		}
-
-	} else {
-
-		count := map[string]int{"words": 0, "lines": 0, "chars": 0, "errorCode": 0}
-		count = readLineByLine(os.Stdin, count, flags, map[string]bool{"file": false})
-
-		fmt.Println("\n", count)
-
+	for _, fileName := range args {
+		wg.Add(1)
+		go fileIntake(fileName, flags, &wg, maxOpenFileLimit)
 	}
 
-	// if isFlagPassed("l") && isFlagPassed("w") && isFlagPassed("c") {
-	// 	fmt.Printf("%8v %8v %8v %8v\n", lineCount["lines"], wordCount["words"], wordCount["chars"], filePath)
-	// }
+	wg.Wait()
 
-	// if isFlagPassed("l") && isFlagPassed("w") {
-	// 	fmt.Printf("%8v %8v %8v\n", lineCount["lines"], wordCount["words"], filePath)
-	// } else if isFlagPassed("l") {
-	// 	fmt.Printf("%8v %8v\n", lineCount["lines"], filePath)
-	// } else if isFlagPassed("w") {
-	// 	fmt.Printf("%8v %8v\n", wordCount["words"], filePath)
-	// } else if isFlagPassed("c") {
-	// 	fmt.Printf("%8v %8v\n", charCount["chars"], filePath)
-	// }
-	return 0
-}
-
-func readFile(filePath string, flags WcFlags, wg *sync.WaitGroup, resultChan chan map[string]int) {
-	defer wg.Done()
-	count := map[string]int{"words": 0, "lines": 0, "chars": 0, "errorCode": 0}
-	file, err := os.Open(filePath)
-
-	if err != nil {
-		fmt.Println(err)
-		return
-	} else {
-		info, _ := os.Stat(filePath)
-		if info.IsDir() {
-			fmt.Printf("wc: %s: Is a directory\n", filePath)
-			count["errorCode"] = 126
+	if len(args) > 1 {
+		file := fileCount{
+			words:    wordCount,
+			lines:    lineCount,
+			chars:    charCount,
+			fileName: "total",
+		}
+		result, err := generateOutput(file, flags)
+		if err != nil {
+			fmt.Fprint(os.Stderr, err)
 			return
 		}
+		fmt.Println(result)
 	}
-	defer file.Close()
-
-	count = readLineByLine(file, count, flags, map[string]bool{"file": true})
-	resultChan <- count
 }
 
-func readLineByLine(reader io.Reader, count map[string]int, flags WcFlags, input map[string]bool) map[string]int {
-	buffReader := bufio.NewReader(reader)
-	for {
-		line, err := buffReader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				count["errorCode"] = 0
-				input["lastLine"] = true
-				return countWLC(flags, count, line, input)
+func fileIntake(fileName string, flags WcFlags, wg *sync.WaitGroup, fileLimit chan int) {
+	fileLimit <- 1
 
-			} else {
-				fmt.Println(err)
-				count["errorCode"] = 126
-			}
-			break
+	defer func() {
+		wg.Done()
+		<-fileLimit
+	}()
 
-		}
-		count = countWLC(flags, count, line, input)
+	line := make(chan []byte)
+	errChan := make(chan error)
+
+	go readFileByLine(fileName, line, errChan)
+	result := count(flags, line, errChan)
+	wordCount += result.chars
+	lineCount += result.lines
+	charCount += result.chars
+	result.fileName = fileName
+
+	output, err := generateOutput(result, flags)
+
+	if err != nil {
+		fmt.Fprint(os.Stderr, err)
+		return
 	}
-	return count
+	fmt.Println(output)
 }
 
-func countWLC(flags WcFlags, count map[string]int, line string, input map[string]bool) map[string]int {
+func generateOutput(count fileCount, flags WcFlags) (string, error) {
+	output := ""
+
+	if count.error != nil {
+		return "", count.error
+	}
+
 	if flags.c {
-		count["chars"] += len(line)
+		output += fmt.Sprintf("%8v", count.chars)
 	}
 
 	if flags.w {
-		words := strings.Fields(line)
-		count["words"] += len(words)
+		output += fmt.Sprintf("%8v", count.words)
 	}
 
-	if flags.l && !input["lastLine"] {
-		count["lines"] += 1
+	if flags.l {
+		output += fmt.Sprintf("%8v", count.lines)
 	}
-	return count
+
+	if !flags.w && !flags.l && !flags.c {
+		output += fmt.Sprintf("%8v", count.chars)
+		output += fmt.Sprintf("%8v", count.words)
+		output += fmt.Sprintf("%8v", count.lines)
+	}
+
+	if count.fileName == "-" {
+		output += "\n"
+	} else {
+		output += fmt.Sprintf(" " + count.fileName + "\n")
+	}
+	return output, nil
+}
+
+func readFileByLine(fileName string, line chan<- []byte, errChan chan<- error) {
+	defer close(line)
+	defer close(errChan)
+	var input io.Reader
+	if fileName == "-" {
+		input = os.Stdin
+	} else {
+		file, err := os.Open(fileName)
+		if err != nil {
+			errChan <- fmt.Errorf("%v", err)
+		}
+		defer file.Close()
+		input = file
+	}
+
+	buffer := make([]byte, 256*1024)
+	var lineBuffer []byte
+
+	for {
+		n, err := input.Read(buffer)
+
+		if err != nil && err != io.EOF {
+			errChan <- fmt.Errorf("%v", err)
+			return
+		}
+
+		for i := 0; i < n; i++ {
+			lineBuffer = append(lineBuffer, buffer[i])
+			if buffer[i] == '\n' {
+				line <- lineBuffer
+				lineBuffer = lineBuffer[:0]
+			}
+		}
+
+		if err == io.EOF {
+			if len(lineBuffer) > 0 {
+				line <- lineBuffer
+			}
+			return
+		}
+	}
+}
+
+func count(flags WcFlags, line <-chan []byte, errChan <-chan error) fileCount {
+	// fmt.Printf("Line is %v", line)
+	var count fileCount
+	for {
+		select {
+		case err := <-errChan:
+			if err != nil {
+				count.error = err
+				return count
+			}
+		case line, ok := <-line:
+			// fmt.Println(string(line))
+			if !ok {
+				return count
+			}
+			if len(line) > 0 && line[len(line)-1] == '\n' {
+				count.lines += 1
+			}
+			count.words += len(bytes.Fields(line))
+			count.chars += len(line)
+		}
+	}
 }
 
 func isFlagPassed(name string) bool {
