@@ -82,16 +82,17 @@ func main() {
 			chars:    charCount,
 			fileName: "total",
 		}
-		result, err := generateOutput(file, flags)
+		output, err := generateOutput(file, flags)
 		if err != nil {
 			fmt.Fprint(os.Stderr, err)
 			return
 		}
-		fmt.Println(result)
+		fmt.Fprint(os.Stdout, output)
 	}
 }
 
 func fileIntake(fileName string, flags WcFlags, wg *sync.WaitGroup, fileLimit chan int) {
+	var input io.Reader
 	fileLimit <- 1
 
 	defer func() {
@@ -102,8 +103,19 @@ func fileIntake(fileName string, flags WcFlags, wg *sync.WaitGroup, fileLimit ch
 	line := make(chan []byte)
 	errChan := make(chan error)
 
-	go readFileByLine(fileName, line, errChan)
-	result := count(flags, line, errChan)
+	if fileName == "-" {
+		input = os.Stdin
+	} else {
+		file, err := os.Open(fileName)
+		if err != nil {
+			errChan <- fmt.Errorf("%v", err)
+		}
+		defer file.Close()
+		input = file
+	}
+
+	go readFileByLine(input, line, errChan)
+	result := count(line, errChan)
 	wordCount += result.chars
 	lineCount += result.lines
 	charCount += result.chars
@@ -115,7 +127,61 @@ func fileIntake(fileName string, flags WcFlags, wg *sync.WaitGroup, fileLimit ch
 		fmt.Fprint(os.Stderr, err)
 		return
 	}
-	fmt.Println(output)
+	fmt.Fprint(os.Stdout, output)
+}
+
+func readFileByLine(input io.Reader, line chan<- []byte, errChan chan<- error) {
+	defer close(line)
+	defer close(errChan)
+
+	buffer := make([]byte, 256*1024)
+	var lineBuffer []byte
+
+	for {
+		buffSizeVal, err := input.Read(buffer)
+
+		if err != nil && err != io.EOF {
+			errChan <- fmt.Errorf("%v", err)
+			return
+		}
+
+		for i := 0; i < buffSizeVal; i++ {
+			lineBuffer = append(lineBuffer, buffer[i])
+			if buffer[i] == '\n' {
+				line <- lineBuffer
+				lineBuffer = lineBuffer[:0]
+			}
+		}
+
+		if err == io.EOF {
+			if len(lineBuffer) > 0 {
+				line <- lineBuffer
+			}
+			return
+		}
+	}
+}
+
+func count(line <-chan []byte, errChan <-chan error) fileCount {
+	var count fileCount
+	for {
+		select {
+		case err := <-errChan:
+			if err != nil {
+				count.error = err
+				return count
+			}
+		case line, ok := <-line:
+			if !ok {
+				return count
+			}
+			if len(line) > 0 && line[len(line)-1] == '\n' {
+				count.lines += 1
+			}
+			count.words += len(bytes.Fields(line))
+			count.chars += len(line)
+		}
+	}
 }
 
 func generateOutput(count fileCount, flags WcFlags) (string, error) {
@@ -149,73 +215,6 @@ func generateOutput(count fileCount, flags WcFlags) (string, error) {
 		output += fmt.Sprintf(" " + count.fileName + "\n")
 	}
 	return output, nil
-}
-
-func readFileByLine(fileName string, line chan<- []byte, errChan chan<- error) {
-	defer close(line)
-	defer close(errChan)
-	var input io.Reader
-	if fileName == "-" {
-		input = os.Stdin
-	} else {
-		file, err := os.Open(fileName)
-		if err != nil {
-			errChan <- fmt.Errorf("%v", err)
-		}
-		defer file.Close()
-		input = file
-	}
-
-	buffer := make([]byte, 256*1024)
-	var lineBuffer []byte
-
-	for {
-		n, err := input.Read(buffer)
-
-		if err != nil && err != io.EOF {
-			errChan <- fmt.Errorf("%v", err)
-			return
-		}
-
-		for i := 0; i < n; i++ {
-			lineBuffer = append(lineBuffer, buffer[i])
-			if buffer[i] == '\n' {
-				line <- lineBuffer
-				lineBuffer = lineBuffer[:0]
-			}
-		}
-
-		if err == io.EOF {
-			if len(lineBuffer) > 0 {
-				line <- lineBuffer
-			}
-			return
-		}
-	}
-}
-
-func count(flags WcFlags, line <-chan []byte, errChan <-chan error) fileCount {
-	// fmt.Printf("Line is %v", line)
-	var count fileCount
-	for {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				count.error = err
-				return count
-			}
-		case line, ok := <-line:
-			// fmt.Println(string(line))
-			if !ok {
-				return count
-			}
-			if len(line) > 0 && line[len(line)-1] == '\n' {
-				count.lines += 1
-			}
-			count.words += len(bytes.Fields(line))
-			count.chars += len(line)
-		}
-	}
 }
 
 func isFlagPassed(name string) bool {

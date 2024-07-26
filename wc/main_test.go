@@ -1,119 +1,201 @@
 package main
 
 import (
-	"reflect"
-	"strings"
-	"sync"
+	"bytes"
+	"fmt"
+	"os"
+	"os/exec"
 	"testing"
 )
 
-func Test_readFile(t *testing.T) {
-	type args struct {
-		filePath   string
-		flags      WcFlags
-		wg         *sync.WaitGroup
-		resultChan chan map[string]int
+func TestWcCommandWithFile(t *testing.T) {
+	// Create a temporary file
+	content := []byte("Hello\nWorld\nTest\n")
+	tmpfile, err := os.CreateTemp("", "example")
+	if err != nil {
+		t.Fatal(err)
 	}
-	tests := []struct {
-		name string
-		args args
-	}{}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			readFile(tt.args.filePath, tt.args.flags, tt.args.wg, tt.args.resultChan)
-		})
+	defer os.Remove(tmpfile.Name()) // clean up
+
+	if _, err := tmpfile.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmpfile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("go", "run", "main.go", tmpfile.Name())
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("cmd.Run() failed with %s\n", err)
+	}
+
+	expected := "      17       3       3 " + tmpfile.Name() + "\n"
+	if out.String() != expected {
+		t.Errorf("Expected output %q, but got %q", expected, out.String())
 	}
 }
 
-func Test_readLineByLine(t *testing.T) {
-	type args struct {
-		customReader *CustomReader
-		count        map[string]int
-		flags        WcFlags
-		input        map[string]bool
-	}
+func Test_count(t *testing.T) {
 	tests := []struct {
-		name string
-		args args
-		want map[string]int
+		name  string
+		input []byte
+		want  fileCount
+		err   error
 	}{
 		{
-			name: "file with all flags",
-			args: args{
-				customReader: NewCustomReader(strings.NewReader("YOLO\nyolo\n")),
-				count:        map[string]int{"words": 0, "lines": 0, "chars": 0, "errorCode": 0},
-				flags:        WcFlags{w: true, l: true, c: true},
-				input:        map[string]bool{"file": true},
+			name:  "Count all words, lines and chars",
+			input: []byte("First line is here\n"),
+			want: fileCount{
+				words: 4,
+				lines: 1,
+				chars: 19,
 			},
-			want: map[string]int{"words": 2, "lines": 2, "chars": 10, "errorCode": 0},
 		},
 		{
-			name: "file with all flags but no newlines",
-			args: args{
-				customReader: NewCustomReader(strings.NewReader("YOLO")),
-				count:        map[string]int{"words": 0, "lines": 0, "chars": 0, "errorCode": 0},
-				flags:        WcFlags{w: true, l: true, c: true},
-				input:        map[string]bool{"file": true},
+			name:  "Count all words and chars only where there is no newline.",
+			input: []byte("First line is here"),
+			want: fileCount{
+				words: 4,
+				lines: 0,
+				chars: 18,
 			},
-			want: map[string]int{"words": 1, "lines": 0, "chars": 4, "errorCode": 0},
+		},
+		{
+			name:  "Error should be sent when there are errors",
+			input: []byte(""),
+			err:   fmt.Errorf("test error"),
+			want: fileCount{
+				words: 0,
+				lines: 0,
+				chars: 0,
+				error: fmt.Errorf("test error"),
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := readLineByLine(tt.args.customReader, tt.args.count, tt.args.flags, tt.args.input); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("readLineByLine() = %v, want %v", got, tt.want)
+			got := runCount(tt.input, tt.err)
+			if !compareFileCount(got, tt.want) {
+				t.Errorf("count() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func Test_countWLC(t *testing.T) {
+func runCount(input []byte, err error) fileCount {
+	line := make(chan []byte)
+	errChan := make(chan error)
+
+	go func() {
+		defer close(line)
+		defer close(errChan)
+
+		if err != nil {
+			errChan <- err
+		} else {
+			line <- input
+		}
+
+	}()
+	return count(line, errChan)
+}
+
+func compareFileCount(a, b fileCount) bool {
+	if a.error != nil || b.error != nil {
+		return a.error.Error() == b.error.Error()
+	}
+	return a.lines == b.lines && a.words == b.words && a.chars == b.chars
+}
+
+func Test_generateOutput(t *testing.T) {
 	type args struct {
+		count fileCount
 		flags WcFlags
-		count map[string]int
-		line  string
-		input map[string]bool
 	}
 	tests := []struct {
 		name string
 		args args
-		want map[string]int
+		want string
 	}{
 		{
-			name: "file with all flags",
+			name: "Count without any flags",
 			args: args{
-				flags: WcFlags{w: true, l: true, c: true},
-				count: map[string]int{"words": 0, "lines": 0, "chars": 0, "errorCode": 0},
-				line:  "the quick brown fox ate the lazy dog",
-				input: map[string]bool{"file": true},
+				count: fileCount{
+					words:    7,
+					lines:    4,
+					chars:    58,
+					fileName: "state.txt",
+				},
+				flags: WcFlags{w: false, l: false, c: false},
 			},
-			want: map[string]int{"words": 8, "lines": 1, "chars": 36, "errorCode": 0},
+			want: "      58       7       4 state.txt\n",
 		},
 		{
-			name: "file with only words and lines flags",
+			name: "Count with all flags",
 			args: args{
-				flags: WcFlags{w: true, l: true, c: false},
-				count: map[string]int{"words": 0, "lines": 0, "chars": 0, "errorCode": 0},
-				line:  "the quick brown fox ate the lazy dog\n",
-				input: map[string]bool{"file": true},
+				count: fileCount{
+					words:    7,
+					lines:    4,
+					chars:    58,
+					fileName: "state.txt",
+				},
+				flags: WcFlags{w: true, l: true, c: true},
 			},
-			want: map[string]int{"words": 8, "lines": 1, "chars": 0, "errorCode": 0},
+			want: "      58       7       4 state.txt\n",
 		},
 		{
-			name: "STDIN with all flags",
+			name: "Count with stdin input",
 			args: args{
+				count: fileCount{
+					words:    7,
+					lines:    4,
+					chars:    58,
+					fileName: "-",
+				},
 				flags: WcFlags{w: true, l: true, c: true},
-				count: map[string]int{"words": 0, "lines": 0, "chars": 0, "errorCode": 0},
-				line:  "the quick brown fox ate the lazy dog only if the dog was quicker if only",
-				input: map[string]bool{"file": true, "lastLine": true},
 			},
-			want: map[string]int{"words": 16, "lines": 0, "chars": 72, "errorCode": 0},
+			want: "      58       7       4\n",
+		},
+		{
+			name: "Count with -w -c flags",
+			args: args{
+				count: fileCount{
+					words:    7,
+					lines:    4,
+					chars:    58,
+					fileName: "state.txt",
+				},
+				flags: WcFlags{w: true, l: false, c: true},
+			},
+			want: "      58       7 state.txt\n",
+		},
+		{
+			name: "Count with error values",
+			args: args{
+				count: fileCount{
+					words:    7,
+					lines:    4,
+					chars:    58,
+					fileName: "state.txt",
+					error:    fmt.Errorf("test error"),
+				},
+				flags: WcFlags{w: true, l: false, c: true},
+			},
+			want: "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := countWLC(tt.args.flags, tt.args.count, tt.args.line, tt.args.input); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("countWLC() = %v, want %v", got, tt.want)
+			got, err := generateOutput(tt.args.count, tt.args.flags)
+			if err != tt.args.count.error {
+				t.Errorf("generateOutput() error = %v, wantErr %v", err, tt.args.count.error)
+			}
+			if got != tt.want {
+				t.Errorf("generateOutput() = %v, want %v", got, tt.want)
 			}
 		})
 	}
