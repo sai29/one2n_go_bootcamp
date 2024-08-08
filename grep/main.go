@@ -30,31 +30,32 @@ var rootCmd = &cobra.Command{
 	Short: "grep is used to find the presence of an input string",
 	Long:  "grep is given an input of a STDIN/file/directory and will confirm the presence of an input string if it is present in the entity we are checking on.",
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) == 0 {
-			args = []string{"-"}
+		stdin := false
+		if len(args) == 1 {
+			stdin = true
 		}
 
-		openFile(args)
+		result := openFile(args, stdin)
+		generateOutput(result)
 	},
 }
 
-func openFile(args []string) {
-
+func openFile(args []string, stdin bool) GrepResult {
+	var input io.Reader
 	subStr := args[0]
-	fileName := args[len(args)-1]
-	file, err := os.Open(fileName)
-	if err != nil {
-		printToStderr(err)
+	if stdin {
+		input = os.Stdin
+	} else {
+		fileName := args[len(args)-1]
+		file, err := os.Open(fileName)
+		if err != nil {
+			printToStderr(err)
+		}
+		input = file
+		defer file.Close()
+
 	}
-	input := file
-	defer file.Close()
-
-	result := readFileByLine(input, subStr)
-
-	for _, v := range result.lines {
-		fmt.Printf("%v\n", v)
-	}
-
+	return readFileByLine(input, subStr)
 }
 
 func readFileByLine(input io.Reader, subStr string) GrepResult {
@@ -67,6 +68,14 @@ func readFileByLine(input io.Reader, subStr string) GrepResult {
 		}
 	}
 	return grepResult
+}
+
+func generateOutput(output GrepResult) {
+	fmt.Println("\n")
+	for _, v := range output.lines {
+		fmt.Printf("\n%v", v)
+	}
+	fmt.Println("\n")
 }
 
 func printToStderr(err error) {
