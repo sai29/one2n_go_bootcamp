@@ -5,18 +5,25 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 type grepResult struct {
-	lines []string
+	lines    []string
+	fileName string
+}
+
+type BatchResult struct {
+	results []grepResult
 }
 
 type flags struct {
-	sendToFile      bool
+	writeToFile     bool
 	caseInsensitive bool
+	recursiveSearch bool
 }
 
 var (
@@ -24,9 +31,9 @@ var (
 )
 
 func init() {
-	rootCmd.Flags().BoolVarP(&flagSet.sendToFile, "send to file", "o", false, "Send grep output to file")
+	rootCmd.Flags().BoolVarP(&flagSet.writeToFile, "send to file", "o", false, "Send grep output to file")
 	rootCmd.Flags().BoolVarP(&flagSet.caseInsensitive, "Case insenstive match", "i", false, "Look to match even if case don't match")
-
+	rootCmd.Flags().BoolVarP(&flagSet.recursiveSearch, "recursive search", "r", false, "Look to match even if case don't match")
 }
 
 func main() {
@@ -46,33 +53,52 @@ var rootCmd = &cobra.Command{
 			stdin = true
 		}
 
-		result := openFile(args, stdin)
-		sendToFile(result, args[len(args)-1])
+		subStr := args[0]
+		fileName := args[1]
 
-		generateOutput(result)
+		if flagSet.recursiveSearch {
+			directory, err := fileOrDirectory(args[1])
+			if err != nil {
+				fmt.Println("there was an error with the path provided")
+			}
+			if directory {
+				results := recursiveSearch(args[1], subStr)
+				generateBatchOutput(results)
+				return
+			} else {
+				result := openFile(fileName, stdin, subStr)
+				writeToFile(result, args[len(args)-1])
+
+				generateOutput(result)
+			}
+		} else {
+			result := openFile(fileName, stdin, subStr)
+			writeToFile(result, args[len(args)-1])
+
+			generateOutput(result)
+		}
 	},
 }
 
-func openFile(args []string, stdin bool) grepResult {
+func openFile(fileName string, stdin bool, subStr string) grepResult {
 	var input io.Reader
-	subStr := args[0]
+
 	if stdin {
 		input = os.Stdin
 	} else {
-		fileName := args[1]
+
 		file, err := os.Open(fileName)
 		if err != nil {
 			printToStdErr(err)
 		}
 		input = file
 		defer file.Close()
-
 	}
-	return readFileByLine(input, subStr)
+	return readFileByLine(input, subStr, fileName)
 }
 
-func readFileByLine(input io.Reader, subStr string) grepResult {
-	grepResult := grepResult{}
+func readFileByLine(input io.Reader, subStr string, fileName string) grepResult {
+	grepResult := grepResult{fileName: fileName}
 	scanner := bufio.NewScanner(input)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -87,8 +113,46 @@ func readFileByLine(input io.Reader, subStr string) grepResult {
 	return grepResult
 }
 
-func sendToFile(result grepResult, fileName string) error {
-	if flagSet.sendToFile {
+func recursiveSearch(rootPath string, subStr string) BatchResult {
+	finalResult := BatchResult{results: []grepResult{}}
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			result := openFile(path, false, subStr)
+			finalResult.results = append(finalResult.results, result)
+		}
+		return nil
+	})
+
+	if err != nil {
+		fmt.Printf("Error")
+	}
+	return finalResult
+}
+
+func fileOrDirectory(path string) (bool, error) {
+	directory := false
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, fmt.Errorf("path does not exist")
+		}
+		fmt.Println("Error:", err)
+		return false, fmt.Errorf("error while processing file/directory at path")
+	}
+
+	if fileInfo.IsDir() {
+		directory = true
+	} else {
+		directory = false
+	}
+	return directory, nil
+}
+
+func writeToFile(result grepResult, fileName string) error {
+	if flagSet.writeToFile {
 		_, err := os.Stat(fileName)
 		if err == nil {
 			printToStdErr(err)
@@ -112,6 +176,17 @@ func sendToFile(result grepResult, fileName string) error {
 func generateOutput(output grepResult) {
 	for _, v := range output.lines {
 		fmt.Printf("\n%v", v)
+	}
+}
+
+func generateBatchOutput(batchResults BatchResult) {
+	for _, v := range batchResults.results {
+		if len(v.lines) != 0 {
+			for _, line := range v.lines {
+				fmt.Printf("\n%v %v", v.fileName, line)
+			}
+
+		}
 	}
 }
 
