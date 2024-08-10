@@ -48,6 +48,7 @@ var rootCmd = &cobra.Command{
 	Short: "grep is used to find the presence of an input string",
 	Long:  "grep is given an input of a STDIN/file/directory and will confirm the presence of an input string if it is present in the entity we are checking on.",
 	Run: func(cmd *cobra.Command, args []string) {
+
 		stdin := false
 		if len(args) == 1 {
 			stdin = true
@@ -56,27 +57,23 @@ var rootCmd = &cobra.Command{
 		subStr := args[0]
 		fileName := args[1]
 
-		if flagSet.recursiveSearch {
-			directory, err := fileOrDirectory(args[1])
-			if err != nil {
-				fmt.Println("there was an error with the path provided")
-			}
-			if directory {
-				results := recursiveSearch(args[1], subStr)
-				generateBatchOutput(results)
-				return
-			} else {
-				result := openFile(fileName, stdin, subStr)
-				writeToFile(result, args[len(args)-1])
+		directory, err := fileOrDirectory(args[1])
+		if err != nil {
+			fmt.Println("there was an error with the path provided")
+		}
 
-				generateOutput(result)
-			}
+		if flagSet.recursiveSearch && directory {
+			results := recursiveSearch(args[1], subStr)
+			batchFileActions(results, args[len(args)-1])
+			generateBatchOutput(results)
+			return
 		} else {
-			result := openFile(fileName, stdin, subStr)
-			writeToFile(result, args[len(args)-1])
 
+			result := openFile(fileName, stdin, subStr)
+			fileActions(result, args[len(args)-1])
 			generateOutput(result)
 		}
+
 	},
 }
 
@@ -151,23 +148,53 @@ func fileOrDirectory(path string) (bool, error) {
 	return directory, nil
 }
 
-func writeToFile(result grepResult, fileName string) error {
+func createFile(fileName string) (*os.File, error) {
+	_, err := os.Stat(fileName)
+	if err == nil {
+		return nil, err
+	}
+	file, err := os.Create(fileName)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
+
+}
+
+func batchFileActions(batchResult BatchResult, fileName string) {
 	if flagSet.writeToFile {
-		_, err := os.Stat(fileName)
-		if err == nil {
-			printToStdErr(err)
-		}
-		file, err := os.Create(fileName)
+		file, err := createFile(fileName)
 		if err != nil {
-			printToStdErr(err)
+			fmt.Println(err)
 		}
 		defer file.Close()
 
-		for _, line := range result.lines {
-			_, err := file.WriteString(line + "\n")
-			if err != nil {
-				return fmt.Errorf("failed to write to file: %w", err)
-			}
+		for _, result := range batchResult.results {
+			writeStringsToFile(result, file)
+		}
+	}
+}
+
+func fileActions(result grepResult, fileName string) error {
+	if flagSet.writeToFile {
+		file, err := createFile(fileName)
+		if err != nil {
+			fmt.Println(err)
+		}
+		defer file.Close()
+
+		return writeStringsToFile(result, file)
+	}
+	return nil
+}
+
+func writeStringsToFile(result grepResult, file *os.File) error {
+	for _, line := range result.lines {
+		_, err := file.WriteString(line + "\n")
+
+		if err != nil {
+			fmt.Printf("Error at writeString to file is %v \n", err)
+			return fmt.Errorf("failed to write to file: %w", err)
 		}
 	}
 	return nil
@@ -185,7 +212,6 @@ func generateBatchOutput(batchResults BatchResult) {
 			for _, line := range v.lines {
 				fmt.Printf("\n%v %v", v.fileName, line)
 			}
-
 		}
 	}
 }
