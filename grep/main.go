@@ -49,26 +49,28 @@ var rootCmd = &cobra.Command{
 	Long:  "grep is given an input of a STDIN/file/directory and will confirm the presence of an input string if it is present in the entity we are checking on.",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		stdin := false
+		stdin, directory := false, false
+		var fileName string
+
 		if len(args) == 1 {
 			stdin = true
+			fileName = "-"
+		} else {
+			fileName = args[1]
+			directory, _ = fileOrDirectory(args[1])
 		}
-
 		subStr := args[0]
-		fileName := args[1]
 
-		directory, err := fileOrDirectory(args[1])
-		if err != nil {
-			fmt.Println("there was an error with the path provided")
-		}
+		// if err != nil {
+		// 	fmt.Println("there was an error with the path provided")
+		// }
 
 		if flagSet.recursiveSearch && directory {
 			results := recursiveSearch(args[1], subStr)
 			batchFileActions(results, args[len(args)-1])
 			generateBatchOutput(results)
 			return
-		} else {
-
+		} else if !directory {
 			result := openFile(fileName, stdin, subStr)
 			fileActions(result, args[len(args)-1])
 			generateOutput(result)
@@ -86,6 +88,7 @@ func openFile(fileName string, stdin bool, subStr string) grepResult {
 
 		file, err := os.Open(fileName)
 		if err != nil {
+			// fmt.Println(err)
 			printToStdErr(err)
 		}
 		input = file
@@ -99,11 +102,14 @@ func readFileByLine(input io.Reader, subStr string, fileName string) grepResult 
 	scanner := bufio.NewScanner(input)
 	for scanner.Scan() {
 		line := scanner.Text()
+		compareLine := line
+		compareSubStr := subStr
 		if flagSet.caseInsensitive {
-			line = strings.ToLower(line)
-			subStr = strings.ToLower(subStr)
+			compareLine = strings.ToLower(line)
+			compareSubStr = strings.ToLower(subStr)
 		}
-		if strings.Contains(line, subStr) {
+
+		if strings.Contains(compareLine, compareSubStr) {
 			grepResult.lines = append(grepResult.lines, line)
 		}
 	}
@@ -124,7 +130,7 @@ func recursiveSearch(rootPath string, subStr string) BatchResult {
 	})
 
 	if err != nil {
-		fmt.Printf("Error")
+		fmt.Printf("Error while recursively searching through directories")
 	}
 	return finalResult
 }
@@ -158,7 +164,6 @@ func createFile(fileName string) (*os.File, error) {
 		return nil, err
 	}
 	return file, nil
-
 }
 
 func batchFileActions(batchResult BatchResult, fileName string) {
