@@ -21,9 +21,11 @@ type BatchResult struct {
 }
 
 type flags struct {
-	writeToFile     bool
-	caseInsensitive bool
-	recursiveSearch bool
+	writeToFile      bool
+	caseInsensitive  bool
+	recursiveSearch  bool
+	printBeforeMatch bool
+	printAfterMatch  bool
 }
 
 var (
@@ -34,6 +36,8 @@ func init() {
 	rootCmd.Flags().BoolVarP(&flagSet.writeToFile, "send to file", "o", false, "Send grep output to file")
 	rootCmd.Flags().BoolVarP(&flagSet.caseInsensitive, "Case insenstive match", "i", false, "Look to match even if case don't match")
 	rootCmd.Flags().BoolVarP(&flagSet.recursiveSearch, "recursive search", "r", false, "Look to match even if case don't match")
+	rootCmd.Flags().BoolVarP(&flagSet.printBeforeMatch, "Print n lines before match", "A", false, "Print n lines before match")
+	rootCmd.Flags().BoolVarP(&flagSet.printBeforeMatch, "Print n lines after match", "B", false, "Print n lines after match")
 }
 
 func main() {
