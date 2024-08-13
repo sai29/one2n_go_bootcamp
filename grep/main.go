@@ -16,16 +16,23 @@ type grepResult struct {
 	fileName string
 }
 
+type beforeAfterLines struct {
+	beforeLines []string
+	line        string
+	afterLines  []string
+}
+
 type BatchResult struct {
 	results []grepResult
 }
 
 type flags struct {
-	writeToFile      bool
-	caseInsensitive  bool
-	recursiveSearch  bool
-	printBeforeMatch bool
-	printAfterMatch  bool
+	writeToFile     bool
+	caseInsensitive bool
+	recursiveSearch bool
+	beforeLines     int
+	afterLines      int
+	countLines      int
 }
 
 var (
@@ -36,8 +43,9 @@ func init() {
 	rootCmd.Flags().BoolVarP(&flagSet.writeToFile, "send to file", "o", false, "Send grep output to file")
 	rootCmd.Flags().BoolVarP(&flagSet.caseInsensitive, "Case insenstive match", "i", false, "Look to match even if case don't match")
 	rootCmd.Flags().BoolVarP(&flagSet.recursiveSearch, "recursive search", "r", false, "Look to match even if case don't match")
-	rootCmd.Flags().BoolVarP(&flagSet.printBeforeMatch, "Print n lines before match", "A", false, "Print n lines before match")
-	rootCmd.Flags().BoolVarP(&flagSet.printBeforeMatch, "Print n lines after match", "B", false, "Print n lines after match")
+	rootCmd.Flags().IntVarP(&flagSet.afterLines, "A", "A", 0, "Number of lines to display after match")
+	rootCmd.Flags().IntVarP(&flagSet.beforeLines, "B", "B", 0, "Number of lines to display before match")
+	rootCmd.Flags().IntVarP(&flagSet.countLines, "C", "C", 0, "Number of lines to display before match")
 }
 
 func main() {
@@ -53,8 +61,22 @@ var rootCmd = &cobra.Command{
 	Long:  "grep is given an input of a STDIN/file/directory and will confirm the presence of an input string if it is present in the entity we are checking on.",
 	Run: func(cmd *cobra.Command, args []string) {
 
+		fmt.Printf("Args are %v", args)
+
 		stdin, directory := false, false
 		var fileName string
+
+		afterLines, beforeErr := cmd.Flags().GetInt("A")
+		beforeLines, afterErr := cmd.Flags().GetInt("B")
+
+		if beforeErr != nil || afterErr != nil {
+			printToStdErr(beforeErr)
+			printToStdErr(afterErr)
+		} else {
+			flagSet.afterLines = afterLines
+			flagSet.beforeLines = beforeLines
+			fmt.Println("flags are ", flagSet)
+		}
 
 		if len(args) == 1 {
 			stdin = true
@@ -104,19 +126,46 @@ func openFile(fileName string, stdin bool, subStr string) grepResult {
 func readFileByLine(input io.Reader, subStr string, fileName string) grepResult {
 	grepResult := grepResult{fileName: fileName}
 	scanner := bufio.NewScanner(input)
+	var lines []string
+	var matches []int
+	lineNum := 0
 	for scanner.Scan() {
 		line := scanner.Text()
+		lines = append(lines, line)
 		compareLine := line
 		compareSubStr := subStr
+		// beforeLines := make([]string, 2)
 		if flagSet.caseInsensitive {
 			compareLine = strings.ToLower(line)
 			compareSubStr = strings.ToLower(subStr)
 		}
 
 		if strings.Contains(compareLine, compareSubStr) {
+			matches = append(matches, lineNum)
 			grepResult.lines = append(grepResult.lines, line)
 		}
+		lineNum++
 	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error while scanning the file")
+	}
+
+	if flagSet.beforeLines > 0 || flagSet.afterLines > 0 {
+		for _, matchLine := range matches {
+
+			start := max(0, matchLine-flagSet.beforeLines)
+
+			end := min(len(lines)-1, matchLine+flagSet.afterLines)
+
+			for i := start; i <= end; i++ {
+				fmt.Printf("%d: %s\n", i+1, lines[i])
+			}
+			fmt.Println(strings.Repeat("-", 40))
+		}
+
+	}
+
 	return grepResult
 }
 
