@@ -11,6 +11,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type matchCountByFile struct {
+	fileName string
+	count    int
+}
+
+type matchCounts struct {
+	total []matchCountByFile
+}
 type flags struct {
 	writeToFile     bool
 	caseInsensitive bool
@@ -23,7 +31,8 @@ type flags struct {
 }
 
 var (
-	flagSet flags
+	flagSet          flags
+	matchCountsTotal matchCounts
 )
 
 func init() {
@@ -76,13 +85,25 @@ var rootCmd = &cobra.Command{
 
 		if flagSet.recursiveSearch && directory {
 			recursiveSearch(args[1], subStr)
-			// generateBatchOutput(results)
-			return
 		} else if !directory {
 			openFile(fileName, stdin, subStr)
 		}
 
+		if flagSet.countLines {
+			if !flagSet.recursiveSearch {
+				fmt.Println(flagSet.lineCount)
+			} else if flagSet.recursiveSearch {
+				generateCountByFile(matchCountsTotal)
+			}
+		}
+
 	},
+}
+
+func generateCountByFile(matches matchCounts) {
+	for _, value := range matches.total {
+		fmt.Printf("\n%v:%v", value.fileName, value.count)
+	}
 }
 
 func openFile(fileName string, stdin bool, subStr string) {
@@ -103,9 +124,9 @@ func openFile(fileName string, stdin bool, subStr string) {
 
 func readFileByLine(input io.Reader, subStr string, fileName string) {
 	scanner := bufio.NewScanner(input)
-	lineNum := 0
 	var file *os.File
 	var err error
+	lineCount := 0
 
 	if flagSet.writeToFile {
 		file, err = openOrCreateFile(flagSet.outputFile)
@@ -124,12 +145,20 @@ func readFileByLine(input io.Reader, subStr string, fileName string) {
 		}
 
 		if strings.Contains(compareLine, compareSubStr) {
-			output := printToTerminal(compareLine, fileName)
+			lineCount++
+			output := printMatches(compareLine, fileName)
 			if flagSet.writeToFile {
 				writeStringsToFile(output, file)
 			}
 		}
-		lineNum++
+	}
+
+	if flagSet.countLines {
+		if flagSet.recursiveSearch {
+			matchCountsTotal.total = append(matchCountsTotal.total, matchCountByFile{fileName: fileName, count: lineCount})
+		} else {
+			flagSet.lineCount += lineCount
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -153,18 +182,19 @@ func writeStringsToFile(line string, file *os.File) error {
 		fmt.Printf("wrintStringsToFile err %v \n", err)
 		return fmt.Errorf("failed to write to file: %w", err)
 	}
-
 	return nil
 }
 
-func printToTerminal(line string, fileName string) string {
+func printMatches(line string, fileName string) string {
 	output := ""
 	if flagSet.recursiveSearch {
 		output = fmt.Sprintf("%v %v", fileName, line)
 	} else {
 		output = fmt.Sprintf("%v", line)
 	}
-	fmt.Println(output)
+	if !flagSet.countLines {
+		fmt.Println(output)
+	}
 	return output
 }
 
