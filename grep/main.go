@@ -17,7 +17,8 @@ type flags struct {
 	recursiveSearch bool
 	beforeLines     int
 	afterLines      int
-	countLines      int
+	countLines      bool
+	lineCount       int
 	outputFile      string
 }
 
@@ -31,7 +32,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&flagSet.recursiveSearch, "recursive search", "r", false, "Look to match even if case don't match")
 	rootCmd.Flags().IntVarP(&flagSet.afterLines, "A", "A", 0, "Number of lines to display after match")
 	rootCmd.Flags().IntVarP(&flagSet.beforeLines, "B", "B", 0, "Number of lines to display before match")
-	rootCmd.Flags().IntVarP(&flagSet.countLines, "C", "C", 0, "Number of lines to display before match")
+	rootCmd.Flags().BoolVarP(&flagSet.countLines, "C", "C", false, "Count of matching lines")
 }
 
 func main() {
@@ -46,9 +47,6 @@ var rootCmd = &cobra.Command{
 	Short: "grep is used to find the presence of an input string",
 	Long:  "grep is given an input of a STDIN/file/directory and will confirm the presence of an input string if it is present in the entity we are checking on.",
 	Run: func(cmd *cobra.Command, args []string) {
-
-		// fmt.Printf("Args are %v", args)
-
 		stdin, directory := false, false
 		var fileName string
 
@@ -61,7 +59,6 @@ var rootCmd = &cobra.Command{
 		} else {
 			flagSet.afterLines = afterLines
 			flagSet.beforeLines = beforeLines
-			fmt.Println("flags are ", flagSet)
 		}
 
 		if flagSet.writeToFile {
@@ -76,10 +73,6 @@ var rootCmd = &cobra.Command{
 			directory, _ = fileOrDirectory(args[1])
 		}
 		subStr := args[0]
-
-		// if err != nil {
-		// 	fmt.Println("there was an error with the path provided")
-		// }
 
 		if flagSet.recursiveSearch && directory {
 			recursiveSearch(args[1], subStr)
@@ -98,11 +91,9 @@ func openFile(fileName string, stdin bool, subStr string) {
 	if stdin {
 		input = os.Stdin
 	} else {
-
 		file, err := os.Open(fileName)
 		if err != nil {
-			// fmt.Println(err)
-			printToStdErr(err)
+			fmt.Println(err)
 		}
 		input = file
 		defer file.Close()
@@ -116,8 +107,8 @@ func readFileByLine(input io.Reader, subStr string, fileName string) {
 	var file *os.File
 	var err error
 
-	if flagSet.writeToFile && !flagSet.recursiveSearch {
-		file, err = createFile(flagSet.outputFile)
+	if flagSet.writeToFile {
+		file, err = openOrCreateFile(flagSet.outputFile)
 		if err != nil {
 			fmt.Println("Error creating file", err)
 		}
@@ -134,8 +125,6 @@ func readFileByLine(input io.Reader, subStr string, fileName string) {
 
 		if strings.Contains(compareLine, compareSubStr) {
 			output := printToTerminal(compareLine, fileName)
-			// checkTypeWithReflect(output)
-			// checkTypeWithReflect(file)
 			if flagSet.writeToFile {
 				writeStringsToFile(output, file)
 			}
@@ -148,14 +137,10 @@ func readFileByLine(input io.Reader, subStr string, fileName string) {
 	}
 }
 
-func createFile(fileName string) (*os.File, error) {
-	_, err := os.Stat(fileName)
-	if err == nil {
-		return nil, err
-	}
+func openOrCreateFile(fileName string) (*os.File, error) {
 	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
-		fmt.Println("Error while creating file", err)
+		fmt.Println("Error opening/creating file:", err)
 		return nil, err
 	}
 	return file, nil
@@ -165,17 +150,12 @@ func writeStringsToFile(line string, file *os.File) error {
 	_, err := file.WriteString(line + "\n")
 
 	if err != nil {
-		fmt.Printf("%v \n", err)
+		fmt.Printf("wrintStringsToFile err %v \n", err)
 		return fmt.Errorf("failed to write to file: %w", err)
 	}
 
 	return nil
 }
-
-// func checkTypeWithReflect(value interface{}) {
-// 	valueType := reflect.TypeOf(value)
-// 	fmt.Println("Type:", valueType)
-// }
 
 func printToTerminal(line string, fileName string) string {
 	output := ""
