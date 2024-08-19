@@ -176,11 +176,12 @@ func readFileByLine(input io.Reader, subStr string, fileName string) {
 					printCurrentLine(line)
 					afterCount--
 				} else {
-					if len(buffer) == flagSet.beforeLines {
-						buffer = buffer[1:]
-					}
 					if flagSet.beforeLines > 0 {
+						if len(buffer) == flagSet.beforeLines {
+							buffer = buffer[1:]
+						}
 						buffer = append(buffer, line)
+
 					}
 
 					if firstMatch && linesSinceLastMatch > flagSet.beforeLines+flagSet.afterLines {
