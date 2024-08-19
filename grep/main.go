@@ -26,7 +26,7 @@ type flags struct {
 	beforeLines     int
 	afterLines      int
 	countLines      bool
-	lineCount       int
+	matchLineCount  int
 	outputFile      string
 }
 
@@ -91,7 +91,7 @@ var rootCmd = &cobra.Command{
 
 		if flagSet.countLines {
 			if !flagSet.recursiveSearch {
-				fmt.Println(flagSet.lineCount)
+				fmt.Println(flagSet.matchLineCount)
 			} else if flagSet.recursiveSearch {
 				generateCountByFile(matchCountsTotal)
 			}
@@ -126,7 +126,13 @@ func readFileByLine(input io.Reader, subStr string, fileName string) {
 	scanner := bufio.NewScanner(input)
 	var file *os.File
 	var err error
-	lineCount := 0
+	matchLineCount := 0
+
+	var buffer []string
+	var afterCount int
+	var linesSinceLastMatch int
+	var firstMatch bool
+	var separatorNeeded bool
 
 	if flagSet.writeToFile {
 		file, err = openOrCreateFile(flagSet.outputFile)
@@ -137,16 +143,56 @@ func readFileByLine(input io.Reader, subStr string, fileName string) {
 	}
 	for scanner.Scan() {
 		line := scanner.Text()
+
 		compareLine := line
 		compareSubStr := subStr
+
 		if flagSet.caseInsensitive {
 			compareLine = strings.ToLower(line)
 			compareSubStr = strings.ToLower(subStr)
 		}
 
+		if flagSet.beforeLines > 0 || flagSet.afterLines > 0 {
+			if strings.Contains(compareLine, compareSubStr) {
+
+				if separatorNeeded {
+					fmt.Println("--")
+					separatorNeeded = false
+				}
+
+				for _, l := range buffer {
+					printCurrentLine(l)
+				}
+				buffer = nil
+
+				printCurrentLine(line)
+				afterCount = flagSet.afterLines
+				linesSinceLastMatch = 0
+				firstMatch = true
+			} else {
+
+				linesSinceLastMatch++
+				if afterCount > 0 {
+					printCurrentLine(line)
+					afterCount--
+				} else {
+					if len(buffer) == flagSet.beforeLines {
+						buffer = buffer[1:]
+					}
+					if flagSet.beforeLines > 0 {
+						buffer = append(buffer, line)
+					}
+
+					if firstMatch && linesSinceLastMatch > flagSet.beforeLines+flagSet.afterLines {
+						separatorNeeded = true
+					}
+				}
+			}
+		}
+
 		if strings.Contains(compareLine, compareSubStr) {
-			lineCount++
-			output := printMatches(compareLine, fileName)
+			matchLineCount++
+			output := printMatches(line, fileName)
 			if flagSet.writeToFile {
 				writeStringsToFile(output, file)
 			}
@@ -155,15 +201,19 @@ func readFileByLine(input io.Reader, subStr string, fileName string) {
 
 	if flagSet.countLines {
 		if flagSet.recursiveSearch {
-			matchCountsTotal.total = append(matchCountsTotal.total, matchCountByFile{fileName: fileName, count: lineCount})
+			matchCountsTotal.total = append(matchCountsTotal.total, matchCountByFile{fileName: fileName, count: matchLineCount})
 		} else {
-			flagSet.lineCount += lineCount
+			flagSet.matchLineCount += matchLineCount
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
 		fmt.Println("Error while scanning the file")
 	}
+}
+
+func printCurrentLine(line string) {
+	fmt.Printf("%s \n", line)
 }
 
 func openOrCreateFile(fileName string) (*os.File, error) {
@@ -192,7 +242,7 @@ func printMatches(line string, fileName string) string {
 	} else {
 		output = fmt.Sprintf("%v", line)
 	}
-	if !flagSet.countLines {
+	if !flagSet.countLines && !flagSet.writeToFile && !(flagSet.beforeLines > 0 || flagSet.afterLines > 0) {
 		fmt.Println(output)
 	}
 	return output
