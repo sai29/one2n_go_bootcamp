@@ -7,9 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 )
+
+const openFileLimit = 10
 
 type matchCountByFile struct {
 	fileName string
@@ -33,6 +36,11 @@ type flags struct {
 var (
 	flagSet          flags
 	matchCountsTotal matchCounts
+	// fileChan         = make(chan string, 100)
+	resultChan       = make(chan string, 100)
+	maxOpenFileLimit = make(chan int, openFileLimit)
+	wg               sync.WaitGroup
+	mutex            sync.Mutex
 )
 
 func init() {
@@ -56,8 +64,6 @@ var rootCmd = &cobra.Command{
 	Short: "grep is used to find the presence of an input string",
 	Long:  "grep is given an input of a STDIN/file/directory and will confirm the presence of an input string if it is present in the entity we are checking on.",
 	Run: func(cmd *cobra.Command, args []string) {
-		stdin, directory := false, false
-		var fileName string
 
 		afterLines, beforeErr := cmd.Flags().GetInt("A")
 		beforeLines, afterErr := cmd.Flags().GetInt("B")
@@ -74,20 +80,16 @@ var rootCmd = &cobra.Command{
 			flagSet.outputFile = args[len(args)-1]
 		}
 
-		if len(args) == 1 {
-			stdin = true
-			fileName = "-"
-		} else {
-			fileName = args[1]
-			directory, _ = fileOrDirectory(args[1])
-		}
+		// if len(args) == 1 {
+		// 	stdin = true
+		// 	fileName = "-"
+		// } else {
+		// 	fileName = args[1]
+		// 	directory, _ = fileOrDirectory(args[1])
+		// }
 		subStr := args[0]
 
-		if flagSet.recursiveSearch && directory {
-			recursiveSearch(args[1], subStr)
-		} else if !directory {
-			openFile(fileName, stdin, subStr)
-		}
+		fileSearch(args[1], subStr)
 
 		if flagSet.countLines {
 			if !flagSet.recursiveSearch {
@@ -98,6 +100,72 @@ var rootCmd = &cobra.Command{
 		}
 
 	},
+}
+
+func fileSearch(rootPath string, subStr string) {
+	fmt.Println("coming here")
+	// for i := 0; i < openFileLimit; i++ {
+	// 	wg.Add(1)
+	// 	go worker(subStr)
+	// }
+
+	// go resultCollector()
+
+	fmt.Println("Root path is", rootPath)
+
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			wg.Add(1)
+			go worker(path, subStr)
+			// fileChan <- path
+			// openFile(path, false, subStr)
+		}
+		return nil
+	})
+
+	close(resultChan)
+	wg.Wait()
+
+	if err != nil {
+		fmt.Println(err)
+		// fmt.Printf("Error while recursively searching through directories")
+	}
+}
+
+func worker(path string, subStr string) {
+	// defer close(fileChan)
+	// defer close(resultChan)
+	maxOpenFileLimit <- 1
+
+	defer func() {
+		wg.Done()
+		<-maxOpenFileLimit
+	}()
+
+	processFile(path, subStr)
+
+	// for {
+	// 	filePath, ok := <-fileChan
+	// 	if ok {
+	// 		fmt.Println("Its okay")
+	// 	}
+	// 	if !ok {
+	// 		fmt.Println("Error sending file path to the channel")
+	// 	}
+	// 	results := processFile(filePath, subStr)
+	// 	for _, result := range results {
+	// 		resultChan <- result
+	// 	}
+	// }
+
+}
+
+func processFile(path string, subStr string) []string {
+	fmt.Println("path is ", path, subStr)
+	return make([]string, 1)
 }
 
 func generateCountByFile(matches matchCounts) {
@@ -181,7 +249,6 @@ func readFileByLine(input io.Reader, subStr string, fileName string) {
 							buffer = buffer[1:]
 						}
 						buffer = append(buffer, line)
-
 					}
 
 					if firstMatch && linesSinceLastMatch > flagSet.beforeLines+flagSet.afterLines {
@@ -247,22 +314,6 @@ func printMatches(line string, fileName string) string {
 		fmt.Println(output)
 	}
 	return output
-}
-
-func recursiveSearch(rootPath string, subStr string) {
-	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			openFile(path, false, subStr)
-		}
-		return nil
-	})
-
-	if err != nil {
-		fmt.Printf("Error while recursively searching through directories")
-	}
 }
 
 func fileOrDirectory(path string) (bool, error) {
