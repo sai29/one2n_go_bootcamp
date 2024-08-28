@@ -87,6 +87,11 @@ var rootCmd = &cobra.Command{
 			flagSet.outputFile = args[len(args)-1]
 		}
 
+		if len(args) < 1 {
+			fmt.Println("No arguments sent to the program.")
+			return
+		}
+
 		if len(args) == 1 {
 			stdin = true
 			fileName = "-"
@@ -113,20 +118,31 @@ func fileSearch(rootPath string, stdin bool, subStr string) {
 	go resultCollector()
 
 	var filePaths []string
-	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			filePaths = append(filePaths, path)
-		}
-		return nil
-	})
 
-	for _, path := range filePaths {
+	if stdin {
 		wg.Add(1)
-		go worker(path, false, subStr)
+		go worker("-", stdin, subStr)
+	} else {
 
+		err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				filePaths = append(filePaths, path)
+			}
+			return nil
+		})
+
+		for _, path := range filePaths {
+			wg.Add(1)
+			go worker(path, stdin, subStr)
+
+		}
+		if err != nil {
+			fmt.Println(err)
+			// fmt.Printf("Error while recursively searching through directories")
+		}
 	}
 	wg.Wait()
 	close(matchChan)
@@ -134,10 +150,6 @@ func fileSearch(rootPath string, stdin bool, subStr string) {
 
 	printResults(matchResult)
 
-	if err != nil {
-		fmt.Println(err)
-		// fmt.Printf("Error while recursively searching through directories")
-	}
 }
 
 func printResults(allMatches fileResult) {
