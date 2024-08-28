@@ -132,9 +132,7 @@ func fileSearch(rootPath string, stdin bool, subStr string) {
 	close(matchChan)
 	close(resultChan)
 
-	mu.Lock()
 	printResults(matchResult)
-	mu.Unlock()
 
 	if err != nil {
 		fmt.Println(err)
