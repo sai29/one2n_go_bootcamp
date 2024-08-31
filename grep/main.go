@@ -115,7 +115,11 @@ var rootCmd = &cobra.Command{
 }
 
 func fileSearch(rootPath string, stdin bool, subStr string) {
-	go resultCollector()
+	done := make(chan bool)
+	go func() {
+		resultCollector()
+		done <- true
+	}()
 
 	var filePaths []string
 
@@ -148,6 +152,9 @@ func fileSearch(rootPath string, stdin bool, subStr string) {
 	close(matchChan)
 	close(resultChan)
 
+	// log.Printf("Final matchResult before printing: %v", matchResult)
+	<-done
+
 	printResults(matchResult)
 
 }
@@ -167,6 +174,7 @@ func printResults(allMatches fileResult) {
 
 func resultCollector() {
 	for result := range matchChan {
+		// log.Printf("resultCollector received: %v", result)
 		mu.Lock()
 		if matchResult.matches == nil {
 			matchResult.matches = make(map[string][]string)
@@ -176,6 +184,7 @@ func resultCollector() {
 		}
 		mu.Unlock()
 	}
+	// log.Printf("Updated matchResult: %v", matchResult)
 }
 
 func worker(path string, stdin bool, subStr string) {
@@ -184,6 +193,7 @@ func worker(path string, stdin bool, subStr string) {
 	defer func() { <-maxOpenFileLimit }()
 
 	results := openFile(path, stdin, subStr)
+	// log.Printf("Worker for %s got results: %v", path, results)
 	matchChan <- results
 }
 
@@ -284,10 +294,10 @@ func readFileByLine(input io.Reader, subStr string, fileName string) map[string]
 			matchLineCount++
 			results[fileName] = append(results[fileName], line)
 
-			output := printMatches(line, fileName)
-			if flagSet.writeToFile {
-				writeStringsToFile(output, file)
-			}
+			// output := printMatches(line, fileName)
+			// if flagSet.writeToFile {
+			// 	writeStringsToFile(output, file)
+			// }
 		}
 	}
 
@@ -304,6 +314,7 @@ func readFileByLine(input io.Reader, subStr string, fileName string) map[string]
 		// fmt.Println("Error while scanning the file")
 	}
 	return results
+
 }
 
 func printCurrentLine(line string) {
