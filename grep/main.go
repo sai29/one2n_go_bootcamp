@@ -256,16 +256,17 @@ func readFileByLine(input io.Reader, subStr string, fileName string) map[string]
 			if strings.Contains(compareLine, compareSubStr) {
 
 				if separatorNeeded {
-					fmt.Println("--")
+					results[fileName] = append(results[fileName], "--")
 					separatorNeeded = false
 				}
 
 				for _, l := range buffer {
-					printCurrentLine(l)
+					results[fileName] = append(results[fileName], l)
 				}
 				buffer = nil
 
-				printCurrentLine(line)
+				results[fileName] = append(results[fileName], line)
+
 				afterCount = flagSet.afterLines
 				linesSinceLastMatch = 0
 				firstMatch = true
@@ -273,7 +274,7 @@ func readFileByLine(input io.Reader, subStr string, fileName string) map[string]
 
 				linesSinceLastMatch++
 				if afterCount > 0 {
-					printCurrentLine(line)
+					results[fileName] = append(results[fileName], line)
 					afterCount--
 				} else {
 					if flagSet.beforeLines > 0 {
@@ -311,7 +312,6 @@ func readFileByLine(input io.Reader, subStr string, fileName string) map[string]
 
 	if err := scanner.Err(); err != nil {
 		fmt.Println(err)
-		// fmt.Println("Error while scanning the file")
 	}
 	return results
 
