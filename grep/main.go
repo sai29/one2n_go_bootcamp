@@ -157,22 +157,29 @@ func fileSearch(rootPath string, stdin bool, subStr string) {
 
 	printResults(matchResult)
 
+	if flagSet.writeToFile {
+		writeToFileActions(matchResult)
+	}
+
 }
 
 func printResults(allMatches fileResult) {
-	if flagSet.countLines {
-		if !flagSet.recursiveSearch {
-			fmt.Println(flagSet.matchLineCount)
-		} else if flagSet.recursiveSearch {
-			generateCountByFile(matchCountsTotal)
-		}
-	} else {
-		for fileName, matchesPerFile := range allMatches.matches {
-			for _, value := range matchesPerFile {
-				if flagSet.recursiveSearch {
-					fmt.Printf("%s %s\n", fileName, value)
-				} else {
-					fmt.Printf("%s\n", value)
+	if !flagSet.writeToFile {
+
+		if flagSet.countLines {
+			if !flagSet.recursiveSearch {
+				fmt.Println(flagSet.matchLineCount)
+			} else if flagSet.recursiveSearch {
+				generateCountByFile(matchCountsTotal)
+			}
+		} else {
+			for fileName, matchesPerFile := range allMatches.matches {
+				for _, value := range matchesPerFile {
+					if flagSet.recursiveSearch {
+						fmt.Printf("%s %s\n", fileName, value)
+					} else {
+						fmt.Printf("%s\n", value)
+					}
 				}
 			}
 		}
@@ -229,8 +236,6 @@ func openFile(fileName string, stdin bool, subStr string) map[string][]string {
 
 func readFileByLine(input io.Reader, subStr string, fileName string) map[string][]string {
 	scanner := bufio.NewScanner(input)
-	var file *os.File
-	var err error
 	matchLineCount := 0
 
 	results := make(map[string][]string)
@@ -242,13 +247,6 @@ func readFileByLine(input io.Reader, subStr string, fileName string) map[string]
 	var firstMatch bool
 	var separatorNeeded bool
 
-	if flagSet.writeToFile {
-		file, err = openOrCreateFile(flagSet.outputFile)
-		if err != nil {
-			fmt.Println("Error creating file", err)
-		}
-		defer file.Close()
-	}
 	for scanner.Scan() {
 		line := scanner.Text()
 
@@ -304,9 +302,7 @@ func readFileByLine(input io.Reader, subStr string, fileName string) map[string]
 			results[fileName] = append(results[fileName], line)
 
 			// output := printMatches(line, fileName)
-			// if flagSet.writeToFile {
-			// 	writeStringsToFile(output, file)
-			// }
+
 		}
 	}
 
@@ -338,14 +334,34 @@ func openOrCreateFile(fileName string) (*os.File, error) {
 	return file, nil
 }
 
-func writeStringsToFile(line string, file *os.File) error {
+func writeToFileActions(results fileResult) {
+	var file *os.File
+	var err error
+	file, err = openOrCreateFile(flagSet.outputFile)
+	if err != nil {
+		fmt.Println("Error creating file", err)
+	}
+	defer file.Close()
+
+	for fileName, matchesPerFile := range results.matches {
+		for _, value := range matchesPerFile {
+			if flagSet.recursiveSearch {
+				writeToFile(fmt.Sprintf("%s %s\n", fileName, value), file)
+			} else {
+				writeToFile(fmt.Sprintf("%s\n", value), file)
+			}
+		}
+	}
+}
+
+func writeToFile(line string, file *os.File) {
+
 	_, err := file.WriteString(line + "\n")
 
 	if err != nil {
 		fmt.Printf("wrintStringsToFile err %v \n", err)
-		return fmt.Errorf("failed to write to file: %w", err)
+		// return fmt.Errorf("failed to write to file: %w", err)
 	}
-	return nil
 }
 
 func printMatches(line string, fileName string) string {
