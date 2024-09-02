@@ -266,9 +266,8 @@ func readFileByLine(input io.Reader, subStr string, fileName string) map[string]
 					separatorNeeded = false
 				}
 
-				for _, l := range buffer {
-					results[fileName] = append(results[fileName], l)
-				}
+				results[fileName] = append(results[fileName], buffer...)
+
 				buffer = nil
 
 				results[fileName] = append(results[fileName], line)
@@ -300,9 +299,6 @@ func readFileByLine(input io.Reader, subStr string, fileName string) map[string]
 		if strings.Contains(compareLine, compareSubStr) {
 			matchLineCount++
 			results[fileName] = append(results[fileName], line)
-
-			// output := printMatches(line, fileName)
-
 		}
 	}
 
@@ -319,10 +315,6 @@ func readFileByLine(input io.Reader, subStr string, fileName string) map[string]
 	}
 	return results
 
-}
-
-func printCurrentLine(line string) {
-	fmt.Printf("%s \n", line)
 }
 
 func openOrCreateFile(fileName string) (*os.File, error) {
@@ -355,26 +347,10 @@ func writeToFileActions(results fileResult) {
 }
 
 func writeToFile(line string, file *os.File) {
-
 	_, err := file.WriteString(line + "\n")
-
 	if err != nil {
 		fmt.Printf("wrintStringsToFile err %v \n", err)
-		// return fmt.Errorf("failed to write to file: %w", err)
 	}
-}
-
-func printMatches(line string, fileName string) string {
-	output := ""
-	if flagSet.recursiveSearch {
-		output = fmt.Sprintf("%v %v", fileName, line)
-	} else {
-		output = fmt.Sprintf("%v", line)
-	}
-	if !flagSet.countLines && !flagSet.writeToFile && !(flagSet.beforeLines > 0 || flagSet.afterLines > 0) {
-		fmt.Println(output)
-	}
-	return output
 }
 
 func printToStdErr(err error) {
