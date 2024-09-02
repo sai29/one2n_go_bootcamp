@@ -103,13 +103,13 @@ var rootCmd = &cobra.Command{
 
 		fileSearch(fileName, stdin, subStr)
 
-		if flagSet.countLines {
-			if !flagSet.recursiveSearch {
-				fmt.Println(flagSet.matchLineCount)
-			} else if flagSet.recursiveSearch {
-				generateCountByFile(matchCountsTotal)
-			}
-		}
+		// if flagSet.countLines {
+		// 	if !flagSet.recursiveSearch {
+		// 		fmt.Println(flagSet.matchLineCount)
+		// 	} else if flagSet.recursiveSearch {
+		// 		generateCountByFile(matchCountsTotal)
+		// 	}
+		// }
 
 	},
 }
@@ -160,16 +160,24 @@ func fileSearch(rootPath string, stdin bool, subStr string) {
 }
 
 func printResults(allMatches fileResult) {
-	for fileName, matchesPerFile := range allMatches.matches {
-		for _, value := range matchesPerFile {
-			if flagSet.recursiveSearch {
-				fmt.Printf("%s %s\n", fileName, value)
-			} else {
-				fmt.Printf("%s\n", value)
+	if flagSet.countLines {
+		if !flagSet.recursiveSearch {
+			fmt.Println(flagSet.matchLineCount)
+		} else if flagSet.recursiveSearch {
+			generateCountByFile(matchCountsTotal)
+		}
+	} else {
+		for fileName, matchesPerFile := range allMatches.matches {
+			for _, value := range matchesPerFile {
+				if flagSet.recursiveSearch {
+					fmt.Printf("%s %s\n", fileName, value)
+				} else {
+					fmt.Printf("%s\n", value)
+				}
 			}
 		}
-
 	}
+
 }
 
 func resultCollector() {
