@@ -80,20 +80,20 @@ package main
 
 // func runCount(input []byte, err error) fileCount {
 // 	line := make(chan []byte)
-// 	errChan := make(chan error)
+// 	lineErrChan := make(chan error)
 
 // 	go func() {
 // 		defer close(line)
-// 		defer close(errChan)
+// 		defer close(lineErrChan)
 
 // 		if err != nil {
-// 			errChan <- err
+// 			lineErrChan <- err
 // 		} else {
 // 			line <- input
 // 		}
 
 // 	}()
-// 	return count(line, errChan)
+// 	return count(line, lineErrChan)
 // }
 
 // func compareFileCount(a, b fileCount) bool {
