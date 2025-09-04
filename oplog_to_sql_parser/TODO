@@ -1,0 +1,10 @@
+
+OPLog_to_Sql:
+  Parser:
+    ✔ Write a struct with the fields from the json @done(25-06-24 13:47)
+    ✔ decode the oplogJson string into a instance of the struct @done(25-06-24 13:47)
+    ☐ Check for op to see if its insert
+    ☐ Connect to database that was already created.
+    ☐ build sql statement string and run it against the database
+    ☐ 
+
