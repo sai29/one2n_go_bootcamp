@@ -3,17 +3,55 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 )
+
+type Parser struct {
+	createdTables map[string]bool
+	tableSchemas  map[string][]string
+}
 
 type Oplog struct {
 	Op            string                 `json:"op"`
 	Namespace     string                 `json:"ns"`
 	Record        map[string]interface{} `json:"o"`
 	UpdateColumns map[string]interface{} `json:"o2"`
+	TableCreated  bool
+}
+
+func NewParser() *Parser {
+	return &Parser{createdTables: make(map[string]bool), tableSchemas: make(map[string][]string)}
 }
 
 func main() {
+
+	oplogInsertJson := []string{
+		`  {
+    "op": "i",
+    "ns": "test.student",
+    "o": {
+      "_id": "635b79e231d82a8ab1de863b",
+      "name": "Selena Miller",
+      "roll_no": 51,
+      "is_graduated": false,
+      "date_of_birth": "2000-01-30"
+    	}
+  	}`,
+		`{
+    "op": "i",
+    "ns": "test.student",
+    "o": {
+      "_id": "14798c213f273a7ca2cf5174",
+      "name": "George Smith",
+      "roll_no": 21,
+      "is_graduated": true,
+      "date_of_birth": "2001-03-23",
+			"phone":"+91-81254966457"
+    	}
+  	}`,
+	}
+
 	// oplogInsertJson := `{
 	// "op": "i",
 	// "ns": "test.student",
@@ -26,25 +64,33 @@ func main() {
 	// 	}
 	// }`
 
-	oplogUpdateJson := `{
-   "op": "u",
-   "ns": "test.student",
-   "o": {
-      "$v": 2,
-      "diff": {
-         "u": {
-            "is_graduated": false,
-						"is_enrolled": true
-        	 }
-      	}
-   		},
-    "o2": {
-      "_id": "635b79e231d82a8ab1de863b",
-			"age": 25
-   		}
-		}`
+	// oplogUpdateJson := `{
+	//  "op": "u",
+	//  "ns": "test.student",
+	//  "o": {
+	//     "$v": 2,
+	//     "diff": {
+	//        "u": {
+	//           "is_graduated": false,
+	// 					"is_enrolled": true
+	//       	 }
+	//     	}
+	//  		},
+	//   "o2": {
+	//     "_id": "635b79e231d82a8ab1de863b",
+	// 		"age": 25
+	//  		}
+	// 	}`
 
-	sql, err := decodeJSONString(oplogUpdateJson)
+	// oplogDeleteJson := `{
+	// 		"op": "d",
+	// 		"ns": "test.student",
+	// 		"o": {
+	// 			"_id": "635b79e231d82a8ab1de863b"
+	// 		}
+	// 	}`
+	parser := NewParser()
+	sql, err := parser.decodeJSONString(oplogInsertJson)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -52,47 +98,133 @@ func main() {
 
 }
 
-func decodeJSONString(jsonOplog string) (string, error) {
+func (p *Parser) decodeJSONString(jsonOplog []string) ([]string, error) {
 
 	var oplog Oplog
-	jsonByte := []byte(jsonOplog)
-
-	err := json.Unmarshal(jsonByte, &oplog)
-	if err != nil {
-
-		fmt.Println("Error converting json string to json value ->", err)
-		return "", fmt.Errorf("error converting json string to json -> %v", err)
+	output := []string{}
+	for _, v := range jsonOplog {
+		jsonByte := []byte(v)
+		err := json.Unmarshal(jsonByte, &oplog)
+		if err != nil {
+			return []string{}, fmt.Errorf("error converting json string to json -> %v", err)
+		}
+		sql, err := p.parseJsonStruct(oplog)
+		if err != nil {
+			return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)
+		} else {
+			output = append(output, sql...)
+		}
+		fmt.Println("Oplog struct is ->", oplog)
 	}
-
-	sql, err := parseJsonStruct(oplog)
-	if err != nil {
-		fmt.Println("Error parsing json struct ->", err)
-	}
-
-	fmt.Println("Oplog struct is ->", oplog)
-	fmt.Println("Sql generated is ->", sql)
-	return sql, nil
+	return output, nil
 }
 
-func parseJsonStruct(oplog Oplog) (string, error) {
+func (p *Parser) parseJsonStruct(oplog Oplog) ([]string, error) {
+	output := []string{}
 	switch oplog.Op {
 	case "i":
-		return insertSql(oplog)
+
+		if !p.createdTables[oplog.Namespace] {
+			createSchema := createSchemaAndTable(oplog)
+			p.saveCurrentTableColumns(oplog)
+			p.createdTables[oplog.Namespace] = true
+			output = append(output, createSchema...)
+
+		}
+		fmt.Println("Insert count for new insert statement is", oplog.TableCreated)
+
+		insertSql, err := p.insertSql(oplog)
+
+		if err == nil {
+			output = append(output, insertSql...)
+			return output, nil
+
+		} else {
+			fmt.Println("Error in insert sql is ->", err)
+			return []string{}, err
+		}
 		// return "INSERT INTO test.student (_id, date_of_birth, is_graduated, name, roll_no) VALUES ('635b79e231d82a8ab1de863b', '2000-01-30', false, 'Selena Miller', 51)", nil
 	case "u":
-		return updateSql(oplog)
-		// return "UPDATE test.student SET is_graduated = true WHERE _id = '635b79e231d82a8ab1de863b' AND archived = false", nil
-	default:
-		return "", fmt.Errorf("error reading collection OP value")
-	}
+		updateSql, err := updateSql(oplog)
+		if err != nil {
+			output = append(output, updateSql)
+			return output, nil
+		} else {
+			return []string{}, err
+		}
 
+		// return "UPDATE test.student SET is_graduated = true WHERE _id = '635b79e231d82a8ab1de863b' AND archived = false", nil
+	case "d":
+		deleteSql, err := deleteSql(oplog)
+		if err != nil {
+			output = append(output, deleteSql)
+			return output, nil
+		} else {
+			return []string{}, err
+		}
+
+	default:
+		return []string{}, fmt.Errorf("error reading collection OP value")
+	}
 }
 
-func insertSql(oplog Oplog) (string, error) {
-	output := ""
+func (p *Parser) saveCurrentTableColumns(oplog Oplog) {
+	for key := range oplog.Record {
+		p.tableSchemas[oplog.Namespace] = append(p.tableSchemas[oplog.Namespace], key)
+	}
+}
+
+func createSchemaAndTable(oplog Oplog) []string {
+	output := []string{}
+	columns := []string{}
+
+	parts := strings.Split(oplog.Namespace, ".")
+	schema := parts[0]
+
+	output = append(output, fmt.Sprintf("CREATE SCHEMA %s", schema))
+
+	for key, value := range oplog.Record {
+		switch value.(type) {
+		case string:
+			if key == "_id" {
+				columns = append(columns, "_id VARCHAR(255) PRIMARY KEY")
+			} else {
+				columns = append(columns, fmt.Sprintf("%s VARCHAR(255)", key))
+			}
+		case bool:
+			columns = append(columns, fmt.Sprintf("%s BOOLEAN", key))
+		case float64, int:
+			columns = append(columns, fmt.Sprintf("%v FLOAT", key))
+		}
+	}
+
+	fmt.Println("columns ->", columns)
+
+	columnsString := fmt.Sprintf("CREATE TABLE %s ( %s )", oplog.Namespace, strings.Join(columns, ", "))
+	output = append(output, columnsString)
+
+	return output
+}
+
+func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
+	output := []string{}
 	columnNames, values := []string{}, []string{}
 
 	for key, value := range oplog.Record {
+
+		if !slices.Contains(p.tableSchemas[oplog.Namespace], key) {
+			p.tableSchemas[oplog.Namespace] = append(p.tableSchemas[oplog.Namespace], key)
+			alterColumnType := ""
+			switch value.(type) {
+			case string:
+				alterColumnType = "VARCHAR(255)"
+			case bool:
+				alterColumnType = "BOOLEAN"
+			case float64, int:
+				alterColumnType = "FLOAT"
+			}
+			output = append(output, fmt.Sprintf("ALTER TABLE %s ADD %s %s", oplog.Namespace, key, alterColumnType))
+		}
 		columnNames = append(columnNames, fmt.Sprintf("\"%s\"", key))
 
 		switch v := value.(type) {
@@ -104,12 +236,13 @@ func insertSql(oplog Oplog) (string, error) {
 		case float64, int:
 			values = append(values, fmt.Sprintf("%v", v))
 		default:
-			values = append(values, fmt.Sprintf("%v", v))
+			values = append(values, fmt.Sprintf("%s", v))
 		}
 	}
 
 	tableName := getQualifiedTableName(oplog.Namespace)
-	output += fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", tableName, strings.Join(columnNames, ","), strings.Join(values, ","))
+	output = append(output, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", tableName, strings.Join(columnNames, ","), strings.Join(values, ",")))
+
 	return output, nil
 }
 
@@ -137,7 +270,18 @@ func updateSql(oplog Oplog) (string, error) {
 	tableName := getQualifiedTableName(oplog.Namespace)
 	output += fmt.Sprintf("UPDATE %s SET %s WHERE %s", tableName, strings.Join(fieldsWithValues, ", "), strings.Join(whereColumnsPaired, " AND "))
 	return output, nil
+}
 
+func deleteSql(oplog Oplog) (string, error) {
+
+	output := ""
+	whereColumnsPaired := []string{}
+
+	whereColumnsPaired = appendedColumnsAndValues(whereColumnsPaired, oplog.Record)
+
+	tableName := getQualifiedTableName(oplog.Namespace)
+	output += fmt.Sprintf("DELETE FROM %s WHERE %s", tableName, strings.Join(whereColumnsPaired, " AND "))
+	return output, nil
 }
 
 func appendedColumnsAndValues(appendSlice []string, columnsMap map[string]interface{}) []string {
@@ -152,15 +296,12 @@ func appendedColumnsAndValues(appendSlice []string, columnsMap map[string]interf
 			appendSlice = append(appendSlice, fmt.Sprintf("\"%s\" = %v", key, v))
 		default:
 			appendSlice = append(appendSlice, fmt.Sprintf("\"%s\" = %v", key, v))
-
 		}
 	}
 	return appendSlice
-
 }
 
 func getQualifiedTableName(tableName string) string {
-
 	parts := strings.SplitN(tableName, ".", 2)
 	if len(parts) < 2 {
 		return fmt.Sprintf("\"%s\"", tableName) // just table, no schema
