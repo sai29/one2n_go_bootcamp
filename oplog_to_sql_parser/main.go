@@ -44,12 +44,35 @@ func main() {
     "o": {
       "_id": "14798c213f273a7ca2cf5174",
       "name": "George Smith",
-      "roll_no": 21,
+      "roll_no": 211,
       "is_graduated": true,
       "date_of_birth": "2001-03-23",
 			"phone":"+91-81254966457"
     	}
   	}`,
+		`{
+			"op": "i",
+			"ns": "test.student",
+			"o": {
+				"_id": "14798c213f273a7ca2cf5174",
+				"name": "John Smith",
+				"roll_no": 11,
+				"date_of_birth": "2001-03-23",
+				"phone": "+91-81254966457",
+				"hourly_rate": 25
+				}
+			}`,
+		`{
+				"op": "i",
+				"ns": "test.student",
+				"o": {
+					"_id": "14798c213f273a7ca2cf5174",
+					"name": "Steve Smith",
+					"roll_no": 23,
+					"is_graduated": true,
+					"date_of_birth": "2001-03-23"
+					}
+				}`,
 	}
 
 	// oplogInsertJson := `{
@@ -100,21 +123,22 @@ func main() {
 
 func (p *Parser) decodeJSONString(jsonOplog []string) ([]string, error) {
 
-	var oplog Oplog
 	output := []string{}
 	for _, v := range jsonOplog {
+		var oplog Oplog
 		jsonByte := []byte(v)
 		err := json.Unmarshal(jsonByte, &oplog)
 		if err != nil {
 			return []string{}, fmt.Errorf("error converting json string to json -> %v", err)
 		}
+		fmt.Println("OPLOG when json is created ->", oplog.Record)
 		sql, err := p.parseJsonStruct(oplog)
 		if err != nil {
 			return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)
 		} else {
 			output = append(output, sql...)
 		}
-		fmt.Println("Oplog struct is ->", oplog)
+		// fmt.Println("Oplog struct is ->", oplog)
 	}
 	return output, nil
 }
@@ -131,7 +155,6 @@ func (p *Parser) parseJsonStruct(oplog Oplog) ([]string, error) {
 			output = append(output, createSchema...)
 
 		}
-		fmt.Println("Insert count for new insert statement is", oplog.TableCreated)
 
 		insertSql, err := p.insertSql(oplog)
 
@@ -208,7 +231,7 @@ func createSchemaAndTable(oplog Oplog) []string {
 
 func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
 	output := []string{}
-	columnNames, values := []string{}, []string{}
+	insertValues := []string{}
 
 	for key, value := range oplog.Record {
 
@@ -225,23 +248,30 @@ func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
 			}
 			output = append(output, fmt.Sprintf("ALTER TABLE %s ADD %s %s", oplog.Namespace, key, alterColumnType))
 		}
-		columnNames = append(columnNames, fmt.Sprintf("\"%s\"", key))
+	}
 
-		switch v := value.(type) {
-		case string:
-			safeVal := strings.ReplaceAll(v, "'", "''")
-			values = append(values, fmt.Sprintf("'%s'", safeVal))
-		case bool:
-			values = append(values, fmt.Sprintf("%t", v))
-		case float64, int:
-			values = append(values, fmt.Sprintf("%v", v))
-		default:
-			values = append(values, fmt.Sprintf("%s", v))
+	for _, column := range p.tableSchemas[oplog.Namespace] {
+		if value, ok := oplog.Record[column]; ok {
+			switch v := value.(type) {
+			case string:
+				safeVal := strings.ReplaceAll(v, "'", "''")
+				insertValues = append(insertValues, fmt.Sprintf("'%s'", safeVal))
+			case bool:
+				insertValues = append(insertValues, fmt.Sprintf("%t", v))
+			case float64, int:
+				insertValues = append(insertValues, fmt.Sprintf("%v", v))
+			default:
+				insertValues = append(insertValues, fmt.Sprintf("%s", v))
+			}
+		} else {
+			fmt.Println("Null value columns are ->", column)
+			insertValues = append(insertValues, "NULL")
 		}
+
 	}
 
 	tableName := getQualifiedTableName(oplog.Namespace)
-	output = append(output, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", tableName, strings.Join(columnNames, ","), strings.Join(values, ",")))
+	output = append(output, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", tableName, strings.Join(p.tableSchemas[oplog.Namespace], ","), strings.Join(insertValues, ",")))
 
 	return output, nil
 }
