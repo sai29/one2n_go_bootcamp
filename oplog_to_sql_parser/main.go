@@ -271,20 +271,8 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 			}
 
 			for _, iValue := range v {
-				parentId, ok := oplog.Record["_id"].(string)
-				parentIdColumn := strings.Split(oplog.Namespace, ".")[1]
-				if ok {
-					// fmt.Println("[]interface{} -> parentId, tableName, v ->", parentId, tableName, v)
-
-					linkedTableInserts, err := p.linkedInsertSql(fmt.Sprintf("%s__id", parentIdColumn), parentId, tableName, iValue)
-					if err != nil {
-						fmt.Println("Error generating insert statements for linked tables", err)
-					} else {
-						p.linkedTableStatements[tableName] = append(p.linkedTableStatements[tableName], linkedTableInserts)
-					}
-				}
+				p.interfaceToStatements(key, iValue)
 			}
-
 			// fmt.Println("linked tables from []interface{} is ->", p.linkedTableStatements[tableName])
 		case interface{}:
 
@@ -299,17 +287,7 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 				// fmt.Println("linked create table is", linkedTableStatements)
 			}
 
-			parentId, ok := oplog.Record["_id"].(string)
-			parentIdColumn := strings.Split(oplog.Namespace, ".")[1]
-			if ok {
-				// fmt.Println("interface{} -> parentId, tableName, v ->", parentId, tableName, v)
-				linkedTableInserts, err := p.linkedInsertSql(fmt.Sprintf("%s__id", parentIdColumn), parentId, tableName, v)
-				if err != nil {
-					fmt.Println("Error generating insert statements for linked tables", err)
-				} else {
-					p.linkedTableStatements[tableName] = append(p.linkedTableStatements[tableName], linkedTableInserts)
-				}
-			}
+			p.interfaceToStatements(key, v)
 			// fmt.Println("Linked tables are from interface{} ->", p.linkedTableStatements[tableName])
 		}
 	}
@@ -320,6 +298,22 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 	output = append(output, columnsString)
 
 	return output
+}
+
+func (p *Parser) interfaceToStatements(tableName string, i interface{}) {
+	tableNameWithSchema := fmt.Sprintf("%s_%s", p.oplog.Namespace, tableName)
+	parentId, ok := p.oplog.Record["_id"].(string)
+	parentIdColumn := strings.Split(p.oplog.Namespace, ".")[1]
+	if ok {
+		fmt.Println("[]interface{} -> parentId, tableName, i ->", parentId, tableNameWithSchema, i)
+
+		linkedTableInserts, err := p.linkedInsertSql(fmt.Sprintf("%s__id", parentIdColumn), parentId, tableNameWithSchema, i)
+		if err != nil {
+			fmt.Println("Error generating insert statements for linked tables", err)
+		} else {
+			p.linkedTableStatements[tableNameWithSchema] = append(p.linkedTableStatements[tableNameWithSchema], linkedTableInserts)
+		}
+	}
 }
 
 func (p *Parser) createLinkedTable(nameSpace string, tableName string, data interface{}) (string, error) {
@@ -404,9 +398,9 @@ func (p *Parser) linkedInsertSql(parentIdColumn string, parentId string, linkedT
 
 				switch column {
 				case parentIdColumn:
-					insertValues = append(insertValues, parentId)
+					insertValues = append(insertValues, fmt.Sprintf("'%s'", parentId))
 				case "_id":
-					insertValues = append(insertValues, randString(16))
+					insertValues = append(insertValues, fmt.Sprintf("'%s'", randString(16)))
 				default:
 					insertValues = append(insertValues, "NULL")
 				}
