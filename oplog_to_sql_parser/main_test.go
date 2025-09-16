@@ -76,37 +76,6 @@ func Test_getQualifiedTableName(t *testing.T) {
 	}
 }
 
-func TestParser_insertSql(t *testing.T) {
-	tests := []struct {
-		name string // description of this test case
-		// Named input parameters for target function.
-		oplog   Oplog
-		want    []string
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := NewParser()
-			got, gotErr := p.insertSql(tt.oplog)
-			if gotErr != nil {
-				if !tt.wantErr {
-					t.Errorf("insertSql() failed: %v", gotErr)
-				}
-				return
-			}
-			if tt.wantErr {
-				t.Fatal("insertSql() succeeded unexpectedly")
-			}
-			// TODO: update the condition below to compare got with tt.want.
-			if true {
-				t.Errorf("insertSql() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestParser_decodeJSONString(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case
@@ -133,6 +102,37 @@ func TestParser_decodeJSONString(t *testing.T) {
 			// TODO: update the condition below to compare got with tt.want.
 			if true {
 				t.Errorf("decodeJSONString() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParser_insertSql(t *testing.T) {
+	tests := []struct {
+		name string // description of this test case
+		// Named input parameters for target function.
+		oplog   Oplog
+		want    []string
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewParser()
+			got, gotErr := p.insertSql(tt.oplog)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("insertSql() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("insertSql() succeeded unexpectedly")
+			}
+			// TODO: update the condition below to compare got with tt.want.
+			if true {
+				t.Errorf("insertSql() = %v, want %v", got, tt.want)
 			}
 		})
 	}
