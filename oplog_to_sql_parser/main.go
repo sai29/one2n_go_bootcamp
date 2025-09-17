@@ -109,7 +109,7 @@ func main() {
 	// 			}`,
 	// }
 
-	// oplogInsertJson := `{
+	// oplogInsertJson := []string{`{
 	// "op": "i",
 	// "ns": "test.student",
 	// "o": {
@@ -119,9 +119,9 @@ func main() {
 	//   "is_graduated": false,
 	//   "date_of_birth": "2000-01-30"
 	// 	}
-	// }`
+	// }`}
 
-	// oplogUpdateJson := `{
+	// oplogUpdateJson := []string{`{
 	//  "op": "u",
 	//  "ns": "test.student",
 	//  "o": {
@@ -137,16 +137,18 @@ func main() {
 	//     "_id": "635b79e231d82a8ab1de863b",
 	// 		"age": 25
 	//  		}
-	// 	}`
+	// 	}`}
 
-	// oplogDeleteJson := `{
+	// oplogDeleteJson := []string{`{
 	// 		"op": "d",
 	// 		"ns": "test.student",
 	// 		"o": {
 	// 			"_id": "635b79e231d82a8ab1de863b"
 	// 		}
-	// 	}`
+	// 	}`}
+
 	parser := NewParser()
+
 	sql, err := parser.decodeJSONString(oplogInsertJson)
 	if err != nil {
 		fmt.Println(err)
@@ -171,7 +173,6 @@ func (p *Parser) decodeJSONString(jsonOplog []string) ([]string, error) {
 		} else {
 			output = append(output, sql...)
 		}
-		// fmt.Println("Oplog struct is ->", oplog)
 	}
 	return output, nil
 }
@@ -205,24 +206,25 @@ func (p *Parser) parseJsonStruct() ([]string, error) {
 			fmt.Println("Error in insert sql is ->", err)
 			return []string{}, err
 		}
-		// return "INSERT INTO test.student (_id, date_of_birth, is_graduated, name, roll_no) VALUES ('635b79e231d82a8ab1de863b', '2000-01-30', false, 'Selena Miller', 51)", nil
 	case "u":
+		fmt.Println("Are we coming here? ->", p.oplog)
 		updateSql, err := updateSql(p.oplog)
 		if err != nil {
+			return []string{}, err
+		} else {
 			output = append(output, updateSql)
 			return output, nil
-		} else {
-			return []string{}, err
+
 		}
 
-		// return "UPDATE test.student SET is_graduated = true WHERE _id = '635b79e231d82a8ab1de863b' AND archived = false", nil
 	case "d":
 		deleteSql, err := deleteSql(p.oplog)
 		if err != nil {
+			return []string{}, err
+		} else {
 			output = append(output, deleteSql)
 			return output, nil
-		} else {
-			return []string{}, err
+
 		}
 
 	default:
@@ -273,7 +275,6 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 			for _, iValue := range v {
 				p.interfaceToStatements(key, iValue)
 			}
-			// fmt.Println("linked tables from []interface{} is ->", p.linkedTableStatements[tableName])
 		case interface{}:
 
 			linkedTableCreate, err := p.createLinkedTable(oplog.Namespace, key, v)
@@ -284,16 +285,12 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 				return []string{}
 			} else {
 				p.linkedTableStatements[tableName] = append(p.linkedTableStatements[tableName], linkedTableCreate)
-				// fmt.Println("linked create table is", linkedTableStatements)
 			}
 
 			p.interfaceToStatements(key, v)
-			// fmt.Println("Linked tables are from interface{} ->", p.linkedTableStatements[tableName])
 		}
 	}
 
-	// fmt.Println("columns ->", columns)
-	// fmt.Println("Linked table create statments are ->", p.linkedTableStatements)
 	columnsString := fmt.Sprintf("CREATE TABLE %s (%s);", oplog.Namespace, strings.Join(columns, ", "))
 	output = append(output, columnsString)
 
@@ -304,9 +301,8 @@ func (p *Parser) interfaceToStatements(tableName string, i interface{}) {
 	tableNameWithSchema := fmt.Sprintf("%s_%s", p.oplog.Namespace, tableName)
 	parentId, ok := p.oplog.Record["_id"].(string)
 	parentIdColumn := strings.Split(p.oplog.Namespace, ".")[1]
-	if ok {
-		fmt.Println("[]interface{} -> parentId, tableName, i ->", parentId, tableNameWithSchema, i)
 
+	if ok {
 		linkedTableInserts, err := p.linkedInsertSql(fmt.Sprintf("%s__id", parentIdColumn), parentId, tableNameWithSchema, i)
 		if err != nil {
 			fmt.Println("Error generating insert statements for linked tables", err)
@@ -314,23 +310,20 @@ func (p *Parser) interfaceToStatements(tableName string, i interface{}) {
 			p.linkedTableStatements[tableNameWithSchema] = append(p.linkedTableStatements[tableNameWithSchema], linkedTableInserts)
 		}
 	}
+
 }
 
 func (p *Parser) createLinkedTable(nameSpace string, tableName string, data interface{}) (string, error) {
-	// fmt.Println("key inside generateLinkedTable ->", tableName)
-	// fmt.Println("Data inside generateLinkedTable ->", data)
 
 	if !p.createdTables[tableName] {
 		tableMap := map[string]interface{}{}
 		tableMap[tableName] = data
 
-		// fmt.Printf("tableMap is -> %s and tableName is %s\n", tableMap, tableName)
 		columns := []string{}
 		parent := strings.Split(nameSpace, ".")
 
 		fullTableNameWithSchema := fmt.Sprintf("%s_%s", nameSpace, tableName)
 		p.saveCurrentTableColumns(tableMap[tableName], fullTableNameWithSchema)
-		// fmt.Println("p.tableSchemas is", p.tableSchemas)
 		p.createdTables[fullTableNameWithSchema] = true
 
 		parentTableName := fmt.Sprintf("%s__id", parent[1])
@@ -338,7 +331,6 @@ func (p *Parser) createLinkedTable(nameSpace string, tableName string, data inte
 		columns = append(columns, "_id VARCHAR(255) PRIMARY KEY", parentTable)
 		p.tableSchemas[fullTableNameWithSchema] = append(p.tableSchemas[fullTableNameWithSchema], parentTableName, "_id")
 
-		// fmt.Println("Value from generateLinkedTable ->", value)
 		m, ok := data.(map[string]interface{})
 		if ok {
 			for key, mvalue := range m {
@@ -356,9 +348,7 @@ func (p *Parser) createLinkedTable(nameSpace string, tableName string, data inte
 					columns = append(columns, fmt.Sprintf("%v FLOAT", key))
 
 				}
-				// fmt.Println("columns and values inside are ->", columns, values)
 			}
-
 		} else {
 			return "", nil
 		}
@@ -367,21 +357,18 @@ func (p *Parser) createLinkedTable(nameSpace string, tableName string, data inte
 		createLinkedTable := fmt.Sprintf("CREATE TABLE %s (%s);", fullTableNameWithSchema, strings.Join(columns, ", "))
 
 		return createLinkedTable, nil
-
 	} else {
 		return "", nil
 	}
 }
 
 func (p *Parser) linkedInsertSql(parentIdColumn string, parentId string, linkedTableName string, record interface{}) (string, error) {
-	// fmt.Println("p.tableSchemas is ->", p.tableSchemas)
 	insertValues := []string{}
 
-	// fmt.Println("p.tableSchemas is ->", p.tableSchemas[linkedTableName])
 	m, ok := record.(map[string]interface{})
-	// fmt.Println("M is ->", m)
 	if ok {
 		for _, column := range p.tableSchemas[linkedTableName] {
+
 			if value, ok := m[column]; ok {
 				switch v := value.(type) {
 				case string:
@@ -410,8 +397,6 @@ func (p *Parser) linkedInsertSql(parentIdColumn string, parentId string, linkedT
 		return "", fmt.Errorf("error with data sent to linkedInsertSql")
 	}
 
-	// fmt.Println("linkedINsertSql insertValues are ->", insertValues)
-
 	output := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", linkedTableName, strings.Join(p.tableSchemas[linkedTableName], ", "), strings.Join(insertValues, ","))
 
 	return output, nil
@@ -434,7 +419,7 @@ func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
 			case float64, int:
 				alterColumnType = "FLOAT"
 			}
-			output = append(output, fmt.Sprintf("ALTER TABLE %s ADD %s %s", oplog.Namespace, key, alterColumnType))
+			output = append(output, fmt.Sprintf("ALTER TABLE %s ADD %s %s;", oplog.Namespace, key, alterColumnType))
 		}
 	}
 
@@ -455,69 +440,24 @@ func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
 		}
 	}
 
-	// tableName := getQualifiedTableName(oplog.Namespace)
 	output = append(output, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", oplog.Namespace, strings.Join(p.tableSchemas[oplog.Namespace], ", "), strings.Join(insertValues, ",")))
 
 	return output, nil
 }
-
-// func (p *Parser) insertSql(record map[string]interface{}) ([]string, error) {
-// 	output := []string{}
-// 	insertValues := []string{}
-
-// 	for key, value := range record {
-
-// 		if !slices.Contains(p.tableSchemas[p.oplog.Namespace], key) {
-// 			p.tableSchemas[p.oplog.Namespace] = append(p.tableSchemas[p.oplog.Namespace], key)
-// 			alterColumnType := ""
-// 			switch value.(type) {
-// 			case string:
-// 				alterColumnType = "VARCHAR(255)"
-// 			case bool:
-// 				alterColumnType = "BOOLEAN"
-// 			case float64, int:
-// 				alterColumnType = "FLOAT"
-// 			}
-// 			output = append(output, fmt.Sprintf("ALTER TABLE %s ADD %s %s", p.oplog.Namespace, key, alterColumnType))
-// 		}
-// 	}
-
-// 	for _, column := range p.tableSchemas[p.oplog.Namespace] {
-// 		if value, ok := record[column]; ok {
-// 			switch v := value.(type) {
-// 			case string:
-// 				safeVal := strings.ReplaceAll(v, "'", "''")
-// 				insertValues = append(insertValues, fmt.Sprintf("'%s'", safeVal))
-// 			case bool:
-// 				insertValues = append(insertValues, fmt.Sprintf("%t", v))
-// 			case float64, int:
-// 				insertValues = append(insertValues, fmt.Sprintf("%v", v))
-
-// 			}
-// 		} else {
-// 			fmt.Println("Null value columns are ->", column)
-// 			insertValues = append(insertValues, "NULL")
-// 		}
-
-// 	}
-
-// 	tableName := getQualifiedTableName(p.oplog.Namespace)
-// 	output = append(output, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", tableName, strings.Join(p.tableSchemas[p.oplog.Namespace], ","), strings.Join(insertValues, ",")))
-
-// 	return output, nil
-// }
 
 func updateSql(oplog Oplog) (string, error) {
 	output := ""
 	fieldsWithValues, whereColumnsPaired := []string{}, []string{}
 
 	diff, ok := oplog.Record["diff"].(map[string]interface{})
+
 	if !ok {
 		fmt.Println("Error fetching diff for UPDATE statement")
 		return "", fmt.Errorf("error fetching diff for UPDATE statement")
 	}
 
 	fieldsToUpdate, ok := diff["u"].(map[string]interface{})
+
 	if !ok {
 		fmt.Println("Error fetching u for UPDATE statement")
 		return "", fmt.Errorf("error fetching u for UPDATE statement")
@@ -530,6 +470,7 @@ func updateSql(oplog Oplog) (string, error) {
 
 	tableName := getQualifiedTableName(oplog.Namespace)
 	output += fmt.Sprintf("UPDATE %s SET %s WHERE %s", tableName, strings.Join(fieldsWithValues, ", "), strings.Join(whereColumnsPaired, " AND "))
+
 	return output, nil
 }
 
