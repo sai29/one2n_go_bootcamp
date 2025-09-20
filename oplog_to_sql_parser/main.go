@@ -234,14 +234,20 @@ func (p *Parser) parseJsonStruct() ([]string, error) {
 
 func (p *Parser) saveCurrentTableColumns(record any, tableName string) {
 
-	v := record.(map[string]interface{})
+	data := record.(map[string]interface{})
 
-	keys := make([]string, 0, len(v))
-	for k := range v {
-		keys = append(keys, k)
+	keys := make([]string, 0, len(data))
+	for k, v := range data {
+		switch v.(type) {
+		case string, bool, int, float64:
+			keys = append(keys, k)
+		default:
+			continue
+		}
 	}
 
 	slices.Sort(keys)
+	fmt.Println("KEYS IS ->", keys)
 	p.tableSchemas[tableName] = append(p.tableSchemas[tableName], keys...)
 }
 
@@ -257,10 +263,55 @@ func (p *Parser) createSchemaAndTable() []string {
 
 	var oplogRecordValue any
 
+	nestedDocumentColumns := []string{}
+
+	for key, value := range p.oplog.Record {
+		switch value.(type) {
+		case []interface{}:
+			nestedDocumentColumns = append(nestedDocumentColumns, key)
+		case map[string]interface{}:
+			nestedDocumentColumns = append(nestedDocumentColumns, key)
+
+		}
+	}
+
+	slices.Sort(nestedDocumentColumns)
+
+	for _, value := range nestedDocumentColumns {
+		switch nestedValue := p.oplog.Record[value].(type) {
+		case []interface{}:
+
+			tableName := fmt.Sprintf("%s_%s", p.oplog.Namespace, value)
+			linkedTableStatements, err := p.createLinkedTable(p.oplog.Namespace, value, nestedValue[0])
+
+			if err != nil {
+				fmt.Println("Error generating linked table for array of nested table ->", err)
+			} else {
+				p.linkedTableStatements[tableName] = append(p.linkedTableStatements[tableName], linkedTableStatements)
+			}
+
+			for _, iValue := range nestedValue {
+				p.interfaceToStatements(value, iValue)
+			}
+		case map[string]interface{}:
+
+			linkedTableCreate, err := p.createLinkedTable(p.oplog.Namespace, value, nestedValue)
+			tableName := fmt.Sprintf("%s_%s", p.oplog.Namespace, value)
+
+			if err != nil {
+				fmt.Println("Error generating linked table ->", err)
+				return []string{}
+			} else {
+				p.linkedTableStatements[tableName] = append(p.linkedTableStatements[tableName], linkedTableCreate)
+			}
+			p.interfaceToStatements(value, nestedValue)
+		}
+	}
+
 	for _, key := range p.tableSchemas[p.oplog.Namespace] {
 		oplogRecordValue = p.oplog.Record[key]
 		// fmt.Println("oplogRecordColumn is ->", oplogRecordValue)
-		switch v := oplogRecordValue.(type) {
+		switch oplogRecordValue.(type) {
 		case string:
 			if key == "_id" {
 				columns = append(columns, "_id VARCHAR(255) PRIMARY KEY")
@@ -271,33 +322,6 @@ func (p *Parser) createSchemaAndTable() []string {
 			columns = append(columns, fmt.Sprintf("%s BOOLEAN", key))
 		case float64, int:
 			columns = append(columns, fmt.Sprintf("%v FLOAT", key))
-		case []interface{}:
-			tableName := fmt.Sprintf("%s_%s", p.oplog.Namespace, key)
-
-			linkedTableStatements, err := p.createLinkedTable(p.oplog.Namespace, key, v[0])
-
-			if err != nil {
-				fmt.Println("Error generating linked table for array of nested table ->", err)
-			} else {
-				p.linkedTableStatements[tableName] = append(p.linkedTableStatements[tableName], linkedTableStatements)
-			}
-
-			for _, iValue := range v {
-				p.interfaceToStatements(key, iValue)
-			}
-		case interface{}:
-
-			linkedTableCreate, err := p.createLinkedTable(p.oplog.Namespace, key, v)
-			tableName := fmt.Sprintf("%s_%s", p.oplog.Namespace, key)
-
-			if err != nil {
-				fmt.Println("Error generating linked table ->", err)
-				return []string{}
-			} else {
-				p.linkedTableStatements[tableName] = append(p.linkedTableStatements[tableName], linkedTableCreate)
-			}
-
-			p.interfaceToStatements(key, v)
 		}
 	}
 
@@ -333,6 +357,7 @@ func (p *Parser) createLinkedTable(nameSpace string, tableName string, data inte
 		parent := strings.Split(nameSpace, ".")
 
 		fullTableNameWithSchema := fmt.Sprintf("%s_%s", nameSpace, tableName)
+		fmt.Println("tableMap[tableName] is ->", tableMap[tableName])
 		p.saveCurrentTableColumns(tableMap[tableName], fullTableNameWithSchema)
 		p.createdTables[fullTableNameWithSchema] = true
 
@@ -417,7 +442,7 @@ func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
 
 	for key, value := range oplog.Record {
 
-		if !slices.Contains(p.tableSchemas[oplog.Namespace], key) {
+		if !slices.Contains(p.tableSchemas[oplog.Namespace], key) && !nestedDocument(value) {
 			p.tableSchemas[oplog.Namespace] = append(p.tableSchemas[oplog.Namespace], key)
 			alterColumnType := ""
 			switch value.(type) {
@@ -522,6 +547,17 @@ func getQualifiedTableName(tableName string) string {
 	return fmt.Sprintf("\"%s\".\"%s\"", schema, table)
 }
 
+func nestedDocument(value any) bool {
+	switch value.(type) {
+	case string, int, bool, float64:
+		return false
+	case []interface{}:
+		return true
+	case interface{}:
+		return true
+	}
+	return false
+}
 func randString(n int) string {
 
 	b := make([]byte, n)
