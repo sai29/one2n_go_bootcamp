@@ -15,6 +15,7 @@ type Parser struct {
 	tableSchemas          map[string][]string
 	linkedTableStatements map[string][]string
 	oplog                 Oplog
+	idGenerator           func(int) string
 }
 
 type Oplog struct {
@@ -27,7 +28,7 @@ type Oplog struct {
 
 func NewParser() *Parser {
 	return &Parser{createdTables: make(map[string]bool), tableSchemas: make(map[string][]string),
-		linkedTableStatements: make(map[string][]string), oplog: Oplog{}}
+		linkedTableStatements: make(map[string][]string), oplog: Oplog{}, idGenerator: randString}
 }
 
 func main() {
@@ -247,7 +248,6 @@ func (p *Parser) saveCurrentTableColumns(record any, tableName string) {
 	}
 
 	slices.Sort(keys)
-	fmt.Println("KEYS IS ->", keys)
 	p.tableSchemas[tableName] = append(p.tableSchemas[tableName], keys...)
 }
 
@@ -344,7 +344,6 @@ func (p *Parser) interfaceToStatements(tableName string, i interface{}) {
 			p.linkedTableStatements[tableNameWithSchema] = append(p.linkedTableStatements[tableNameWithSchema], linkedTableInserts)
 		}
 	}
-
 }
 
 func (p *Parser) createLinkedTable(nameSpace string, tableName string, data interface{}) (string, error) {
@@ -357,7 +356,6 @@ func (p *Parser) createLinkedTable(nameSpace string, tableName string, data inte
 		parent := strings.Split(nameSpace, ".")
 
 		fullTableNameWithSchema := fmt.Sprintf("%s_%s", nameSpace, tableName)
-		fmt.Println("tableMap[tableName] is ->", tableMap[tableName])
 		p.saveCurrentTableColumns(tableMap[tableName], fullTableNameWithSchema)
 		p.createdTables[fullTableNameWithSchema] = true
 
@@ -365,6 +363,7 @@ func (p *Parser) createLinkedTable(nameSpace string, tableName string, data inte
 		parentTable := fmt.Sprintf("%s VARCHAR(255)", parentTableName)
 		columns = append(columns, "_id VARCHAR(255) PRIMARY KEY", parentTable)
 		p.tableSchemas[fullTableNameWithSchema] = append(p.tableSchemas[fullTableNameWithSchema], parentTableName, "_id")
+		slices.Sort(p.tableSchemas[fullTableNameWithSchema])
 
 		m, ok := data.(map[string]interface{})
 		if ok {
@@ -398,6 +397,8 @@ func (p *Parser) createLinkedTable(nameSpace string, tableName string, data inte
 }
 
 func (p *Parser) linkedInsertSql(parentIdColumn string, parentId string, linkedTableName string, record interface{}) (string, error) {
+
+	// fmt.Println("p.tableSchemas is", p.tableSchemas, linkedTableName)
 	insertValues := []string{}
 
 	m, ok := record.(map[string]interface{})
@@ -422,7 +423,7 @@ func (p *Parser) linkedInsertSql(parentIdColumn string, parentId string, linkedT
 				case parentIdColumn:
 					insertValues = append(insertValues, fmt.Sprintf("'%s'", parentId))
 				case "_id":
-					insertValues = append(insertValues, fmt.Sprintf("'%s'", randString(16)))
+					insertValues = append(insertValues, fmt.Sprintf("'%s'", p.idGenerator(16)))
 				default:
 					insertValues = append(insertValues, "NULL")
 				}
@@ -432,7 +433,7 @@ func (p *Parser) linkedInsertSql(parentIdColumn string, parentId string, linkedT
 		return "", fmt.Errorf("error with data sent to linkedInsertSql")
 	}
 
-	output := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", linkedTableName, strings.Join(p.tableSchemas[linkedTableName], ", "), strings.Join(insertValues, ","))
+	output := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", linkedTableName, strings.Join(p.tableSchemas[linkedTableName], ", "), strings.Join(insertValues, ", "))
 
 	return output, nil
 }
@@ -536,15 +537,6 @@ func appendedColumnsAndValues(appendSlice []string, columnsMap map[string]interf
 		}
 	}
 	return appendSlice
-}
-
-func getQualifiedTableName(tableName string) string {
-	parts := strings.SplitN(tableName, ".", 2)
-	if len(parts) < 2 {
-		return fmt.Sprintf("\"%s\"", tableName) // just table, no schema
-	}
-	schema, table := parts[0], parts[1]
-	return fmt.Sprintf("\"%s\".\"%s\"", schema, table)
 }
 
 func nestedDocument(value any) bool {

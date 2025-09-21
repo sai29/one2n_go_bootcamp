@@ -5,6 +5,9 @@ import (
 	"testing"
 )
 
+func fakeIDGenerator(n int) string {
+	return "64798c213f273a7ca2cf516e"
+}
 func TestParser_decodeJSONString(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case
@@ -137,13 +140,14 @@ func TestParser_decodeJSONString(t *testing.T) {
 								}
 							}
 						}`},
-			want:    []string{"CREATE SCHEMA test;", "CREATE TABLE test.student (_id VARCHAR(255) PRIMARY KEY, date_of_birth VARCHAR(255), is_graduated BOOLEAN, name VARCHAR(255), roll_no FLOAT);", "INSERT INTO test.student (_id, date_of_birth, is_graduated, name, roll_no) VALUES ('635b79e231d82a8ab1de863b', '2000-01-30', false, 'Selena Miller', 51);", "CREATE TABLE test.student_address (_id VARCHAR(255) PRIMARY KEY, student__id VARCHAR(255), line1 VARCHAR(255), zip VARCHAR(255));", "INSERT INTO test.student_address (_id, line1, student__id, zip) VALUES ('64798c213f273a7ca2cf516e', '481 Harborsburgh', '635b79e231d82a8ab1de863b', '89799');", "INSERT INTO test.student_address (_id, line1, student__id, zip) VALUES ('14798c213f273a7ca2cf5174', '329 Flatside', '635b79e231d82a8ab1de863b', '80872');", "CREATE TABLE test.student_phone (_id VARCHAR(255) PRIMARY KEY, student__id VARCHAR(255), personal VARCHAR(255), work VARCHAR(255));", "INSERT INTO test.student_phone (_id, personal, student__id, work) VALUES ('14798c213f273a7ca2cf5199', '7678456640', '635b79e231d82a8ab1de863b', '8130097989');"},
+			want:    []string{"CREATE SCHEMA test;", "CREATE TABLE test.student (_id VARCHAR(255) PRIMARY KEY, date_of_birth VARCHAR(255), is_graduated BOOLEAN, name VARCHAR(255), roll_no FLOAT);", "INSERT INTO test.student (_id, date_of_birth, is_graduated, name, roll_no) VALUES ('635b79e231d82a8ab1de863b', '2000-01-30', false, 'Selena Miller', 51);", "CREATE TABLE test.student_address (_id VARCHAR(255) PRIMARY KEY, student__id VARCHAR(255), line1 VARCHAR(255), zip VARCHAR(255));", "INSERT INTO test.student_address (_id, line1, student__id, zip) VALUES ('64798c213f273a7ca2cf516e', '481 Harborsburgh', '635b79e231d82a8ab1de863b', '89799');", "INSERT INTO test.student_address (_id, line1, student__id, zip) VALUES ('64798c213f273a7ca2cf516e', '329 Flatside', '635b79e231d82a8ab1de863b', '80872');", "CREATE TABLE test.student_phone (_id VARCHAR(255) PRIMARY KEY, student__id VARCHAR(255), personal VARCHAR(255), work VARCHAR(255));", "INSERT INTO test.student_phone (_id, personal, student__id, work) VALUES ('64798c213f273a7ca2cf516e', '7678456640', '635b79e231d82a8ab1de863b', '8130097989');"},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := NewParser()
+			p.idGenerator = fakeIDGenerator //fakeID set for tests since not possible to compare randomly generated ID from the code to test data.
 			got, gotErr := p.decodeJSONString(tt.jsonOplog)
 			if gotErr != nil {
 				if !tt.wantErr {
@@ -154,7 +158,6 @@ func TestParser_decodeJSONString(t *testing.T) {
 			if tt.wantErr {
 				t.Fatal("decodeJSONString() succeeded unexpectedly")
 			}
-			// TODO: update the condition below to compare got with tt.want.
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("decodeJSONString() = %v, want %v", got, tt.want)
 			}
