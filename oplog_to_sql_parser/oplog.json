@@ -1,0 +1,85 @@
+[
+  {
+    "op": "i",
+    "ns": "test.student",
+    "o": {
+      "_id": "635b79e231d82a8ab1de863b",
+      "name": "Selena Miller",
+      "roll_no": 51,
+      "is_graduated": false,
+      "date_of_birth": "2000-01-30"
+    }
+  },
+  {
+    "op": "u",
+    "ns": "test.student",
+    "o": {
+      "$v": 2,
+      "diff": {
+        "u": {
+          "is_graduated": true
+        }
+      }
+    },
+    "o2": {
+      "_id": "635b79e231d82a8ab1de863b"
+    }
+  },
+  {
+    "op": "d",
+    "ns": "test.student",
+    "o": {
+      "_id": "635b79e231d82a8ab1de863b"
+    }
+  },
+
+  {
+    "op": "i",
+    "ns": "test.student",
+    "o": {
+      "_id": "635b79e231d82a8ab1de863b",
+      "name": "Selena Miller",
+      "roll_no": 51,
+      "is_graduated": false,
+      "date_of_birth": "2000-01-30"
+    }
+  },
+  {
+    "op": "i",
+    "ns": "test.student",
+    "o": {
+      "_id": "14798c213f273a7ca2cf5174",
+      "name": "George Smith",
+      "roll_no": 21,
+      "is_graduated": true,
+      "date_of_birth": "2001-03-23",
+      "phone": "+91-81254966457"
+    }
+  },
+  {
+    "op": "i",
+    "ns": "test.student",
+    "o": {
+      "_id": "635b79e231d82a8ab1de863b",
+      "name": "Selena Miller",
+      "roll_no": 51,
+      "is_graduated": false,
+      "date_of_birth": "2000-01-30",
+      "address": [
+        {
+          "line1": "481 Harborsburgh",
+          "zip": "89799"
+        },
+        {
+          "line1": "329 Flatside",
+          "zip": "80872"
+        }
+      ],
+      "phone": {
+        "personal": "7678456640",
+        "work": "8130097989"
+      }
+    }
+  }
+]
+  

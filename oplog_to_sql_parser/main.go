@@ -4,17 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"slices"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
 
 const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var flagCfg = &FlagConfig{}
 
 type Parser struct {
 	createdTables         map[string]bool
 	tableSchemas          map[string][]string
 	linkedTableStatements map[string][]string
-	oplog                 Oplog
 	idGenerator           func(int) string
 }
 
@@ -26,173 +30,128 @@ type Oplog struct {
 	TableCreated  bool
 }
 
+type FlagConfig struct {
+	InputFile  string
+	OutputFile string
+	InputUri   string
+	OutputUri  string
+}
+
 func NewParser() *Parser {
 	return &Parser{createdTables: make(map[string]bool), tableSchemas: make(map[string][]string),
-		linkedTableStatements: make(map[string][]string), oplog: Oplog{}, idGenerator: randString}
+		linkedTableStatements: make(map[string][]string), idGenerator: randString}
+}
+
+func init() {
+	rootCmd.Flags().StringVar(&flagCfg.InputFile, "input-file", "", "Input json oplog file")
+	rootCmd.Flags().StringVar(&flagCfg.OutputFile, "output-file", "", "Output sql file to write to")
 }
 
 func main() {
-
-	// oplogInsertJson := []string{
-	// 	`{
-	// 		"op": "i",
-	// 		"ns": "test.student",
-	// 		"o": {
-	// 			"_id": "635b79e231d82a8ab1de863b",
-	// 			"name": "Selena Miller",
-	// 			"roll_no": 51,
-	// 			"is_graduated": false,
-	// 			"date_of_birth": "2000-01-30",
-	// 			"address": [
-	// 				{
-	// 					"line1": "481 Harborsburgh",
-	// 					"zip": "89799"
-	// 				},
-	// 				{
-	// 					"line1": "329 Flatside",
-	// 					"zip": "80872"
-	// 				}
-	// 			],
-	// 			"phone": {
-	// 				"personal": "7678456640",
-	// 				"work": "8130097989"
-	// 			}
-	// 		}
-	// 	}`,
-	// }
-
-	// oplogInsertJson := []string{
-	// 	`  {
-	//   "op": "i",
-	//   "ns": "test.student",
-	//   "o": {
-	//     "_id": "635b79e231d82a8ab1de863b",
-	//     "name": "Selena Miller",
-	//     "roll_no": 51,
-	//     "is_graduated": false,
-	//     "date_of_birth": "2000-01-30"
-	//   	}
-	// 	}`,
-	// 	`{
-	//   "op": "i",
-	//   "ns": "test.student",
-	//   "o": {
-	//     "_id": "14798c213f273a7ca2cf5174",
-	//     "name": "George Smith",
-	//     "roll_no": 211,
-	//     "is_graduated": true,
-	//     "date_of_birth": "2001-03-23",
-	// 		"phone":"+91-81254966457"
-	//   	}
-	// 	}`,
-	// 	`{
-	// 		"op": "i",
-	// 		"ns": "test.student",
-	// 		"o": {
-	// 			"_id": "14798c213f273a7ca2cf5174",
-	// 			"name": "John Smith",
-	// 			"roll_no": 11,
-	// 			"date_of_birth": "2001-03-23",
-	// 			"phone": "+91-81254966457",
-	// 			"hourly_rate": 25
-	// 			}
-	// 		}`,
-	// 	`{
-	// 			"op": "i",
-	// 			"ns": "test.student",
-	// 			"o": {
-	// 				"_id": "14798c213f273a7ca2cf5174",
-	// 				"name": "Steve Smith",
-	// 				"roll_no": 23,
-	// 				"is_graduated": true,
-	// 				"date_of_birth": "2001-03-23"
-	// 				}
-	// 			}`,
-	// }
-
-	oplogInsertJson := []string{`{
-	"op": "i",
-	"ns": "test.student",
-	"o": {
-	  "_id": "635b79e231d82a8ab1de863b",
-	  "name": "Selena Miller",
-	  "roll_no": 51,
-	  "is_graduated": false,
-	  "date_of_birth": "2000-01-30"
-		}
-	}`}
-
-	// oplogUpdateJson := []string{`{
-	//  "op": "u",
-	//  "ns": "test.student",
-	//  "o": {
-	//     "$v": 2,
-	//     "diff": {
-	//        "u": {
-	//           "is_graduated": false,
-	// 					"is_enrolled": true
-	//       	 }
-	//     	}
-	//  		},
-	//   "o2": {
-	//     "_id": "635b79e231d82a8ab1de863b",
-	// 		"age": 25
-	//  		}
-	// 	}`}
-
-	// oplogDeleteJson := []string{`{
-	// 		"op": "d",
-	// 		"ns": "test.student",
-	// 		"o": {
-	// 			"_id": "635b79e231d82a8ab1de863b"
-	// 		}
-	// 	}`}
-
-	parser := NewParser()
-
-	sql, err := parser.decodeJSONString(oplogInsertJson)
-	if err != nil {
-		fmt.Println(err)
+	if err := rootCmd.Execute(); err != nil {
+		printToStdErr(err)
+		os.Exit(1)
 	}
-	fmt.Println("Sql is ->", sql)
-
 }
 
-func (p *Parser) decodeJSONString(jsonOplog []string) ([]string, error) {
+var rootCmd = &cobra.Command{
+	Use:   "oplog to sql parser",
+	Short: "Convert mongodb oplog to sql statements",
+	Long:  "Process json or direct streamed input from mongodb and convert it into sql statements or send them to a postgres db",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		parser := NewParser()
+		// openFile(flagCfg.InputFile, parser)
 
-	output := []string{}
-	for _, v := range jsonOplog {
-		jsonByte := []byte(v)
-		err := json.Unmarshal(jsonByte, &p.oplog)
+		// sql, err := parser.decodeJSONString(oplogInsertJson)
+		sql, err := openFile(flagCfg.InputFile, parser)
+
 		if err != nil {
-			return []string{}, fmt.Errorf("error converting json string to json -> %v", err)
-		}
-		// fmt.Println("OPLOG when json is created ->", oplog.Record)
-		sql, err := p.parseJsonStruct()
-		if err != nil {
-			return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)
+			return err
 		} else {
-			output = append(output, sql...)
+			fmt.Println("rootCmd sql is ->", sql)
+
 		}
-	}
-	return output, nil
+		return nil
+	},
 }
 
-func (p *Parser) parseJsonStruct() ([]string, error) {
+func openFile(fileName string, p *Parser) ([]string, error) {
+	// var input io.Reader
+	file, err := os.Open(fileName)
+	if err != nil {
+		return []string{}, fmt.Errorf("error opening the file")
+	}
+
+	defer file.Close()
+
+	dec := json.NewDecoder(file)
+
+	t, err := dec.Token()
+	if err != nil {
+		return []string{}, fmt.Errorf("error with json input")
+	}
+	if delim, ok := t.(json.Delim); !ok || delim != '[' {
+		return []string{}, fmt.Errorf("expected [ at start of JSON array")
+	}
+
+	sqlStatements := []string{}
+
+	for dec.More() {
+		var entry Oplog
+		if err := dec.Decode(&entry); err != nil {
+			return []string{}, fmt.Errorf("error decoding json into Oplog struct")
+
+		} else {
+			fmt.Printf("%+v\n", entry)
+			sql, err := p.getSqlStatements(entry)
+			if err != nil {
+				// fmt.Println("sql inside dec.More() is ->", sql)
+				return []string{}, err
+
+			} else {
+				sqlStatements = append(sqlStatements, sql...)
+
+			}
+		}
+	}
+
+	t, err = dec.Token()
+	if err != nil {
+		return []string{}, err
+	}
+
+	if delim, ok := t.(json.Delim); !ok || delim != ']' {
+		return []string{}, fmt.Errorf("expected ] at the end of JSON array")
+	}
+	// fmt.Println("Sql statements is ->", sqlStatements)
+	return sqlStatements, nil
+
+}
+
+func (p *Parser) getSqlStatements(oplog Oplog) ([]string, error) {
+	sql, err := p.parseJsonStruct(oplog)
+	// fmt.Println("getSqlStatements ->", sql)
+	if err != nil {
+		return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)
+	} else {
+		return sql, nil
+	}
+}
+
+func (p *Parser) parseJsonStruct(oplog Oplog) ([]string, error) {
 	output := []string{}
-	switch p.oplog.Op {
+	switch oplog.Op {
 	case "i":
 
-		if !p.createdTables[p.oplog.Namespace] {
-			p.saveCurrentTableColumns(p.oplog.Record, p.oplog.Namespace)
+		if !p.createdTables[oplog.Namespace] {
+			p.saveCurrentTableColumns(oplog.Record, oplog.Namespace)
 
-			createSchema := p.createSchemaAndTable()
-			p.createdTables[p.oplog.Namespace] = true
+			createSchema := p.createSchemaAndTable(oplog)
+			p.createdTables[oplog.Namespace] = true
 			output = append(output, createSchema...)
 
 		}
-
-		insertSql, err := p.insertSql(p.oplog)
+		insertSql, err := p.insertSql(oplog)
 
 		if err == nil {
 			output = append(output, insertSql...)
@@ -209,7 +168,7 @@ func (p *Parser) parseJsonStruct() ([]string, error) {
 			return []string{}, err
 		}
 	case "u":
-		updateSql, err := p.updateSql()
+		updateSql, err := p.updateSql(oplog)
 		if err != nil {
 			return []string{}, err
 		} else {
@@ -219,7 +178,7 @@ func (p *Parser) parseJsonStruct() ([]string, error) {
 		}
 
 	case "d":
-		deleteSql, err := deleteSql(p.oplog)
+		deleteSql, err := deleteSql(oplog)
 		if err != nil {
 			return []string{}, err
 		} else {
@@ -248,28 +207,34 @@ func (p *Parser) saveCurrentTableColumns(record any, tableName string) {
 	}
 
 	slices.Sort(keys)
+	// fmt.Println("Keys is ->", keys)
 	p.tableSchemas[tableName] = append(p.tableSchemas[tableName], keys...)
 }
 
-func (p *Parser) createSchemaAndTable() []string {
+func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
+
 	output, columns := []string{}, []string{}
 
-	parts := strings.Split(p.oplog.Namespace, ".")
+	parts := strings.Split(oplog.Namespace, ".")
 	schema := parts[0]
 
 	output = append(output, fmt.Sprintf("CREATE SCHEMA %s;", schema))
 
-	// fmt.Println("p.tableSchemas[p.oplog.Namespace] is ->", p.tableSchemas[p.oplog.Namespace])
+	// fmt.Println("p.tableSchemas[oplog.Namespace] is ->", p.tableSchemas[oplog.Namespace])
 
 	var oplogRecordValue any
 
 	nestedDocumentColumns := []string{}
 
-	for key, value := range p.oplog.Record {
+	for key, value := range oplog.Record {
 		switch value.(type) {
 		case []interface{}:
+			fmt.Println("nestedColumns append ->", value)
+
 			nestedDocumentColumns = append(nestedDocumentColumns, key)
 		case map[string]interface{}:
+			fmt.Println("nestedColumns append ->", value)
+
 			nestedDocumentColumns = append(nestedDocumentColumns, key)
 
 		}
@@ -278,11 +243,13 @@ func (p *Parser) createSchemaAndTable() []string {
 	slices.Sort(nestedDocumentColumns)
 
 	for _, value := range nestedDocumentColumns {
-		switch nestedValue := p.oplog.Record[value].(type) {
+		fmt.Println("value is ->", value)
+		switch nestedValue := oplog.Record[value].(type) {
 		case []interface{}:
+			fmt.Println("[]interface{}")
 
-			tableName := fmt.Sprintf("%s_%s", p.oplog.Namespace, value)
-			linkedTableStatements, err := p.createLinkedTable(p.oplog.Namespace, value, nestedValue[0])
+			tableName := fmt.Sprintf("%s_%s", oplog.Namespace, value)
+			linkedTableStatements, err := p.createLinkedTable(oplog.Namespace, value, nestedValue[0])
 
 			if err != nil {
 				fmt.Println("Error generating linked table for array of nested table ->", err)
@@ -291,12 +258,12 @@ func (p *Parser) createSchemaAndTable() []string {
 			}
 
 			for _, iValue := range nestedValue {
-				p.interfaceToStatements(value, iValue)
+				p.interfaceToStatements(oplog, value, iValue)
 			}
 		case map[string]interface{}:
-
-			linkedTableCreate, err := p.createLinkedTable(p.oplog.Namespace, value, nestedValue)
-			tableName := fmt.Sprintf("%s_%s", p.oplog.Namespace, value)
+			fmt.Println("map[string]interface{} ->")
+			linkedTableCreate, err := p.createLinkedTable(oplog.Namespace, value, nestedValue)
+			tableName := fmt.Sprintf("%s_%s", oplog.Namespace, value)
 
 			if err != nil {
 				fmt.Println("Error generating linked table ->", err)
@@ -304,12 +271,14 @@ func (p *Parser) createSchemaAndTable() []string {
 			} else {
 				p.linkedTableStatements[tableName] = append(p.linkedTableStatements[tableName], linkedTableCreate)
 			}
-			p.interfaceToStatements(value, nestedValue)
+			p.interfaceToStatements(oplog, value, nestedValue)
 		}
 	}
 
-	for _, key := range p.tableSchemas[p.oplog.Namespace] {
-		oplogRecordValue = p.oplog.Record[key]
+	// fmt.Println("p.tableSchemas[oplog.Namespace] ->", p.tableSchemas)
+
+	for _, key := range p.tableSchemas[oplog.Namespace] {
+		oplogRecordValue = oplog.Record[key]
 		// fmt.Println("oplogRecordColumn is ->", oplogRecordValue)
 		switch oplogRecordValue.(type) {
 		case string:
@@ -325,16 +294,16 @@ func (p *Parser) createSchemaAndTable() []string {
 		}
 	}
 
-	columnsString := fmt.Sprintf("CREATE TABLE %s (%s);", p.oplog.Namespace, strings.Join(columns, ", "))
+	columnsString := fmt.Sprintf("CREATE TABLE %s (%s);", oplog.Namespace, strings.Join(columns, ", "))
 	output = append(output, columnsString)
 
 	return output
 }
 
-func (p *Parser) interfaceToStatements(tableName string, i interface{}) {
-	tableNameWithSchema := fmt.Sprintf("%s_%s", p.oplog.Namespace, tableName)
-	parentId, ok := p.oplog.Record["_id"].(string)
-	parentIdColumn := strings.Split(p.oplog.Namespace, ".")[1]
+func (p *Parser) interfaceToStatements(oplog Oplog, tableName string, i interface{}) {
+	tableNameWithSchema := fmt.Sprintf("%s_%s", oplog.Namespace, tableName)
+	parentId, ok := oplog.Record["_id"].(string)
+	parentIdColumn := strings.Split(oplog.Namespace, ".")[1]
 
 	if ok {
 		linkedTableInserts, err := p.linkedInsertSql(fmt.Sprintf("%s__id", parentIdColumn), parentId, tableNameWithSchema, i)
@@ -484,11 +453,11 @@ func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
 	return output, nil
 }
 
-func (p *Parser) updateSql() (string, error) {
+func (p *Parser) updateSql(oplog Oplog) (string, error) {
 	output := ""
 	fieldsWithValues, whereColumnsPaired := []string{}, []string{}
 
-	diff, ok := p.oplog.Record["diff"].(map[string]interface{})
+	diff, ok := oplog.Record["diff"].(map[string]interface{})
 
 	if !ok {
 		fmt.Println("Error fetching diff for UPDATE statement")
@@ -502,12 +471,12 @@ func (p *Parser) updateSql() (string, error) {
 		return "", fmt.Errorf("error fetching u for UPDATE statement")
 	}
 
-	whereColumns := p.oplog.UpdateColumns
+	whereColumns := oplog.UpdateColumns
 
 	whereColumnsPaired = appendedColumnsAndValues(whereColumnsPaired, whereColumns)
 	fieldsWithValues = appendedColumnsAndValues(fieldsWithValues, fieldsToUpdate)
 
-	output += fmt.Sprintf("UPDATE %s SET %s WHERE %s;", p.oplog.Namespace, strings.Join(fieldsWithValues, ", "), strings.Join(whereColumnsPaired, " AND "))
+	output += fmt.Sprintf("UPDATE %s SET %s WHERE %s;", oplog.Namespace, strings.Join(fieldsWithValues, ", "), strings.Join(whereColumnsPaired, " AND "))
 
 	return output, nil
 }
@@ -550,6 +519,7 @@ func nestedDocument(value any) bool {
 	}
 	return false
 }
+
 func randString(n int) string {
 
 	b := make([]byte, n)
@@ -557,4 +527,8 @@ func randString(n int) string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+func printToStdErr(err error) {
+	fmt.Fprint(os.Stderr, err)
 }
