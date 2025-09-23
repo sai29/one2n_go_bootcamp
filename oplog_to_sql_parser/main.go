@@ -93,7 +93,7 @@ func writeToFileActions(sql []string) {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(strings.Join(sql, " ") + "\n")
+	_, err = file.WriteString(strings.Join(sql, ", ") + "\n")
 	if err != nil {
 		fmt.Printf("error writing to output file -> %v\n", err)
 	}
@@ -127,7 +127,7 @@ func openFile(fileName string, p *Parser) ([]string, error) {
 			return []string{}, fmt.Errorf("error decoding json into Oplog struct")
 
 		} else {
-			fmt.Printf("%+v\n", entry)
+			// fmt.Printf("%+v\n", entry)
 			sql, err := p.getSqlStatements(entry)
 			if err != nil {
 				return []string{}, err
@@ -250,7 +250,6 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 		case []interface{}:
 			nestedDocumentColumns = append(nestedDocumentColumns, key)
 		case map[string]interface{}:
-
 			nestedDocumentColumns = append(nestedDocumentColumns, key)
 
 		}
@@ -346,7 +345,8 @@ func (p *Parser) createLinkedTable(nameSpace string, tableName string, data inte
 
 		m, ok := data.(map[string]interface{})
 		if ok {
-			for key, mvalue := range m {
+			for _, key := range p.tableSchemas[fullTableNameWithSchema] {
+				mvalue := m[key]
 				switch mvalue.(type) {
 				case string:
 					if key == "_id" {
