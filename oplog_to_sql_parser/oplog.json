@@ -1,85 +1,228 @@
 [
-  {
-    "op": "i",
-    "ns": "test.student",
-    "o": {
-      "_id": "635b79e231d82a8ab1de863b",
-      "name": "Selena Miller",
-      "roll_no": 51,
-      "is_graduated": false,
-      "date_of_birth": "2000-01-30"
-    }
-  },
-  {
-    "op": "u",
-    "ns": "test.student",
-    "o": {
-      "$v": 2,
-      "diff": {
-        "u": {
-          "is_graduated": true
-        }
-      }
-    },
-    "o2": {
-      "_id": "635b79e231d82a8ab1de863b"
-    }
-  },
-  {
-    "op": "d",
-    "ns": "test.student",
-    "o": {
-      "_id": "635b79e231d82a8ab1de863b"
-    }
-  },
-
-  {
-    "op": "i",
-    "ns": "test.student",
-    "o": {
-      "_id": "635b79e231d82a8ab1de863b",
-      "name": "Selena Miller",
-      "roll_no": 51,
-      "is_graduated": false,
-      "date_of_birth": "2000-01-30"
-    }
-  },
-  {
-    "op": "i",
-    "ns": "test.student",
-    "o": {
-      "_id": "14798c213f273a7ca2cf5174",
-      "name": "George Smith",
-      "roll_no": 21,
-      "is_graduated": true,
-      "date_of_birth": "2001-03-23",
-      "phone": "+91-81254966457"
-    }
-  },
-  {
-    "op": "i",
-    "ns": "test.student",
-    "o": {
-      "_id": "635b79e231d82a8ab1de863b",
-      "name": "Selena Miller",
-      "roll_no": 51,
-      "is_graduated": false,
-      "date_of_birth": "2000-01-30",
-      "address": [
-        {
-          "line1": "481 Harborsburgh",
-          "zip": "89799"
+    {
+        "lsid": {
+            "id": {
+                "Subtype": 4,
+                "Data": "Pd3SzDbdTAe8wR86M1x0Pw=="
+            },
+            "uid": {
+                "Subtype": 0,
+                "Data": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="
+            }
         },
-        {
-          "line1": "329 Flatside",
-          "zip": "80872"
-        }
-      ],
-      "phone": {
-        "personal": "7678456640",
-        "work": "8130097989"
-      }
+        "ns": "student.students",
+        "o": {
+            "_id": "64798c213f273a7ca2cf516a",
+            "age": 25,
+            "name": "Nathan Lindgren",
+            "subject": "Maths"
+        },
+        "o2": {
+            "_id": "64798c213f273a7ca2cf516a"
+        },
+        "op": "i",
+        "prevOpTime": {
+            "t": -1,
+            "ts": {
+                "T": 0,
+                "I": 0
+            }
+        },
+        "stmtId": 0,
+        "t": 1,
+        "ts": {
+            "T": 1685687329,
+            "I": 2
+        },
+        "txnNumber": 1,
+        "ui": {
+            "Subtype": 4,
+            "Data": "Vn3IRssuTqmZgBMWQ47Olg=="
+        },
+        "v": 2,
+        "wall": "2023-06-02T11:58:49.457+05:30"
+    },
+    {
+        "lsid": {
+            "id": {
+                "Subtype": 4,
+                "Data": "Pd3SzDbdTAe8wR86M1x0Pw=="
+            },
+            "uid": {
+                "Subtype": 0,
+                "Data": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="
+            }
+        },
+        "ns": "student.students",
+        "o": {
+            "_id": "64798c213f273a7ca2cf516b",
+            "age": 18,
+            "name": "Meggie Hoppe",
+            "subject": "English"
+        },
+        "o2": {
+            "_id": "64798c213f273a7ca2cf516b"
+        },
+        "op": "i",
+        "prevOpTime": {
+            "t": -1,
+            "ts": {
+                "T": 0,
+                "I": 0
+            }
+        },
+        "stmtId": 0,
+        "t": 1,
+        "ts": {
+            "T": 1685687329,
+            "I": 3
+        },
+        "txnNumber": 2,
+        "ui": {
+            "Subtype": 4,
+            "Data": "Vn3IRssuTqmZgBMWQ47Olg=="
+        },
+        "v": 2,
+        "wall": "2023-06-02T11:58:49.478+05:30"
+    },
+    {
+        "lsid": {
+            "id": {
+                "Subtype": 4,
+                "Data": "Pd3SzDbdTAe8wR86M1x0Pw=="
+            },
+            "uid": {
+                "Subtype": 0,
+                "Data": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="
+            }
+        },
+        "ns": "employee.employees",
+        "o": {
+            "_id": "64798c213f273a7ca2cf516c",
+            "address": [
+                {
+                    "line1": "32550 Port Gatewaytown",
+                    "zip": "18399"
+                },
+                {
+                    "line1": "3840 Cornermouth",
+                    "zip": "83941"
+                }
+            ],
+            "age": 35,
+            "name": "Raymond Monahan",
+            "phone": {
+                "personal": "8764255212",
+                "work": "2762135091"
+            },
+            "position": "Engineer",
+            "salary": 3767.925634753098
+        },
+        "o2": {
+            "_id": "64798c213f273a7ca2cf516c"
+        },
+        "op": "i",
+        "prevOpTime": {
+            "t": -1,
+            "ts": {
+                "T": 0,
+                "I": 0
+            }
+        },
+        "stmtId": 0,
+        "t": 1,
+        "ts": {
+            "T": 1685687329,
+            "I": 5
+        },
+        "txnNumber": 3,
+        "ui": {
+            "Subtype": 4,
+            "Data": "R+ti5mC7TyOGvdPIAhOlBg=="
+        },
+        "v": 2,
+        "wall": "2023-06-02T11:58:49.504+05:30"
+    },
+    {
+        "lsid": {
+            "id": {
+                "Subtype": 4,
+                "Data": "Pd3SzDbdTAe8wR86M1x0Pw=="
+            },
+            "uid": {
+                "Subtype": 0,
+                "Data": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="
+            }
+        },
+        "ns": "student.students",
+        "o": {
+            "_id": "64798c213f273a7ca2cf516a"
+        },
+        "op": "d",
+        "prevOpTime": {
+            "t": -1,
+            "ts": {
+                "T": 0,
+                "I": 0
+            }
+        },
+        "stmtId": 0,
+        "t": 1,
+        "ts": {
+            "T": 1685687329,
+            "I": 6
+        },
+        "txnNumber": 4,
+        "ui": {
+            "Subtype": 4,
+            "Data": "Vn3IRssuTqmZgBMWQ47Olg=="
+        },
+        "v": 2,
+        "wall": "2023-06-02T11:58:49.533+05:30"
+    },
+    {
+        "lsid": {
+            "id": {
+                "Subtype": 4,
+                "Data": "Pd3SzDbdTAe8wR86M1x0Pw=="
+            },
+            "uid": {
+                "Subtype": 0,
+                "Data": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="
+            }
+        },
+        "ns": "employee.employees",
+        "o": {
+            "$v": 2,
+            "diff": {
+                "u": {
+                    "Age": 23
+                }
+            }
+        },
+        "o2": {
+            "_id": "64798c213f273a7ca2cf5171"
+        },
+        "op": "u",
+        "prevOpTime": {
+            "t": -1,
+            "ts": {
+                "T": 0,
+                "I": 0
+            }
+        },
+        "stmtId": 0,
+        "t": 1,
+        "ts": {
+            "T": 1685687329,
+            "I": 12
+        },
+        "txnNumber": 10,
+        "ui": {
+            "Subtype": 4,
+            "Data": "R+ti5mC7TyOGvdPIAhOlBg=="
+        },
+        "v": 2,
+        "wall": "2023-06-02T11:58:49.559+05:30"
     }
-  }
 ]
-  

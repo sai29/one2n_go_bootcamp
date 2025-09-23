@@ -68,11 +68,36 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return err
 		} else {
-			fmt.Println("rootCmd sql is ->", sql)
+			// fmt.Println("rootCmd sql is ->", sql)
+			writeToFileActions(sql)
 
 		}
 		return nil
 	},
+}
+
+func openOrCreateFile(fileName string) (*os.File, error) {
+	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		fmt.Printf("Error opening/creating file -> %s\n err: %s", fileName, err)
+	}
+	return file, nil
+}
+
+func writeToFileActions(sql []string) {
+	var file *os.File
+	var err error
+	file, err = openOrCreateFile(flagCfg.OutputFile)
+	if err != nil {
+		fmt.Println("Error creating file", err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(strings.Join(sql, " ") + "\n")
+	if err != nil {
+		fmt.Printf("error writing to output file -> %v\n", err)
+	}
+
 }
 
 func openFile(fileName string, p *Parser) ([]string, error) {
@@ -105,7 +130,6 @@ func openFile(fileName string, p *Parser) ([]string, error) {
 			fmt.Printf("%+v\n", entry)
 			sql, err := p.getSqlStatements(entry)
 			if err != nil {
-				// fmt.Println("sql inside dec.More() is ->", sql)
 				return []string{}, err
 
 			} else {
@@ -123,14 +147,12 @@ func openFile(fileName string, p *Parser) ([]string, error) {
 	if delim, ok := t.(json.Delim); !ok || delim != ']' {
 		return []string{}, fmt.Errorf("expected ] at the end of JSON array")
 	}
-	// fmt.Println("Sql statements is ->", sqlStatements)
 	return sqlStatements, nil
 
 }
 
 func (p *Parser) getSqlStatements(oplog Oplog) ([]string, error) {
 	sql, err := p.parseJsonStruct(oplog)
-	// fmt.Println("getSqlStatements ->", sql)
 	if err != nil {
 		return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)
 	} else {
@@ -200,14 +222,13 @@ func (p *Parser) saveCurrentTableColumns(record any, tableName string) {
 	for k, v := range data {
 		switch v.(type) {
 		case string, bool, int, float64:
-			keys = append(keys, k)
+			keys = append(keys, strings.ToLower(k))
 		default:
 			continue
 		}
 	}
 
 	slices.Sort(keys)
-	// fmt.Println("Keys is ->", keys)
 	p.tableSchemas[tableName] = append(p.tableSchemas[tableName], keys...)
 }
 
@@ -220,8 +241,6 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 
 	output = append(output, fmt.Sprintf("CREATE SCHEMA %s;", schema))
 
-	// fmt.Println("p.tableSchemas[oplog.Namespace] is ->", p.tableSchemas[oplog.Namespace])
-
 	var oplogRecordValue any
 
 	nestedDocumentColumns := []string{}
@@ -229,11 +248,8 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 	for key, value := range oplog.Record {
 		switch value.(type) {
 		case []interface{}:
-			fmt.Println("nestedColumns append ->", value)
-
 			nestedDocumentColumns = append(nestedDocumentColumns, key)
 		case map[string]interface{}:
-			fmt.Println("nestedColumns append ->", value)
 
 			nestedDocumentColumns = append(nestedDocumentColumns, key)
 
@@ -243,10 +259,8 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 	slices.Sort(nestedDocumentColumns)
 
 	for _, value := range nestedDocumentColumns {
-		fmt.Println("value is ->", value)
 		switch nestedValue := oplog.Record[value].(type) {
 		case []interface{}:
-			fmt.Println("[]interface{}")
 
 			tableName := fmt.Sprintf("%s_%s", oplog.Namespace, value)
 			linkedTableStatements, err := p.createLinkedTable(oplog.Namespace, value, nestedValue[0])
@@ -261,7 +275,6 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 				p.interfaceToStatements(oplog, value, iValue)
 			}
 		case map[string]interface{}:
-			fmt.Println("map[string]interface{} ->")
 			linkedTableCreate, err := p.createLinkedTable(oplog.Namespace, value, nestedValue)
 			tableName := fmt.Sprintf("%s_%s", oplog.Namespace, value)
 
@@ -275,11 +288,8 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) []string {
 		}
 	}
 
-	// fmt.Println("p.tableSchemas[oplog.Namespace] ->", p.tableSchemas)
-
 	for _, key := range p.tableSchemas[oplog.Namespace] {
 		oplogRecordValue = oplog.Record[key]
-		// fmt.Println("oplogRecordColumn is ->", oplogRecordValue)
 		switch oplogRecordValue.(type) {
 		case string:
 			if key == "_id" {
@@ -339,7 +349,6 @@ func (p *Parser) createLinkedTable(nameSpace string, tableName string, data inte
 			for key, mvalue := range m {
 				switch mvalue.(type) {
 				case string:
-					// fmt.Println("key and value is ->", key, mvalue)
 					if key == "_id" {
 						continue
 					} else {
@@ -367,7 +376,6 @@ func (p *Parser) createLinkedTable(nameSpace string, tableName string, data inte
 
 func (p *Parser) linkedInsertSql(parentIdColumn string, parentId string, linkedTableName string, record interface{}) (string, error) {
 
-	// fmt.Println("p.tableSchemas is", p.tableSchemas, linkedTableName)
 	insertValues := []string{}
 
 	m, ok := record.(map[string]interface{})
@@ -443,7 +451,6 @@ func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
 				insertValues = append(insertValues, fmt.Sprintf("%v", v))
 			}
 		} else {
-			fmt.Println("Null value columns are ->", column)
 			insertValues = append(insertValues, "NULL")
 		}
 	}
@@ -493,6 +500,7 @@ func deleteSql(oplog Oplog) (string, error) {
 
 func appendedColumnsAndValues(appendSlice []string, columnsMap map[string]interface{}) []string {
 	for key, value := range columnsMap {
+		key = strings.ToLower(key)
 		switch v := value.(type) {
 		case string:
 			safeVal := strings.ReplaceAll(v, "'", "''")
