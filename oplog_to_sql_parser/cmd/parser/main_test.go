@@ -3,6 +3,9 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/input"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
 )
 
 func fakeIDGenerator(n int) string {
@@ -14,22 +17,22 @@ func Test_openFile(t *testing.T) {
 		name string // description of this test case
 		// Named input parameters for target function.
 		fileName string
-		p        *Parser
+		p        *parser.Parser
 		want     []string
 		wantErr  bool
 	}{
 		{
 			name:     "json file with all types of oplog",
-			fileName: "oplog.json",
-			p:        NewParser(),
+			fileName: "../../oplog.json",
+			p:        parser.NewParser(),
 			want:     []string{"CREATE SCHEMA student;", "CREATE TABLE student.students (_id VARCHAR(255) PRIMARY KEY, age FLOAT, name VARCHAR(255), subject VARCHAR(255));", "INSERT INTO student.students (_id, age, name, subject) VALUES ('64798c213f273a7ca2cf516a', 25, 'Nathan Lindgren', 'Maths');", "INSERT INTO student.students (_id, age, name, subject) VALUES ('64798c213f273a7ca2cf516b', 18, 'Meggie Hoppe', 'English');", "CREATE SCHEMA employee;", "CREATE TABLE employee.employees (_id VARCHAR(255) PRIMARY KEY, age FLOAT, name VARCHAR(255), position VARCHAR(255), salary FLOAT);", "INSERT INTO employee.employees (_id, age, name, position, salary) VALUES ('64798c213f273a7ca2cf516c', 35, 'Raymond Monahan', 'Engineer', 3767.925634753098);", "CREATE TABLE employee.employees_address (_id VARCHAR(255) PRIMARY KEY, employees__id VARCHAR(255), line1 VARCHAR(255), zip VARCHAR(255));", "INSERT INTO employee.employees_address (_id, employees__id, line1, zip) VALUES ('64798c213f273a7ca2cf516e', '64798c213f273a7ca2cf516c', '32550 Port Gatewaytown', '18399');", "INSERT INTO employee.employees_address (_id, employees__id, line1, zip) VALUES ('64798c213f273a7ca2cf516e', '64798c213f273a7ca2cf516c', '3840 Cornermouth', '83941');", "CREATE TABLE employee.employees_phone (_id VARCHAR(255) PRIMARY KEY, employees__id VARCHAR(255), personal VARCHAR(255), work VARCHAR(255));", "INSERT INTO employee.employees_phone (_id, employees__id, personal, work) VALUES ('64798c213f273a7ca2cf516e', '64798c213f273a7ca2cf516c', '8764255212', '2762135091');", "DELETE FROM student.students WHERE _id = '64798c213f273a7ca2cf516a';", "UPDATE employee.employees SET age = 23 WHERE _id = '64798c213f273a7ca2cf5171';"},
 			wantErr:  false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.p.idGenerator = fakeIDGenerator
-			got, gotErr := openFile(tt.fileName, tt.p)
+			tt.p.IdGenerator = fakeIDGenerator
+			got, gotErr := input.OpenFile(tt.fileName, tt.p)
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("openFile() failed: %v", gotErr)
