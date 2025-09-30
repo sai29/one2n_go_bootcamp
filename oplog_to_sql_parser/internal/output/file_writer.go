@@ -4,7 +4,19 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/config"
 )
+
+func WriteToOutput(sql []string, flagCfg *config.Config) {
+	switch flagCfg.OutputMethod {
+	case "file":
+		WriteToFileActions(sql, flagCfg.OutputFile)
+
+	case "db":
+		WriteToDbActions([]string{}, flagCfg.InputUri)
+	}
+}
 
 func openOrCreateFile(fileName string) (*os.File, error) {
 	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)

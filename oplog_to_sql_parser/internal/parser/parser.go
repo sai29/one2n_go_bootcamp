@@ -1,6 +1,8 @@
 package parser
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Parser struct {
 	createdTables         map[string]bool
@@ -23,7 +25,7 @@ func NewParser() *Parser {
 }
 
 func (p *Parser) GetSqlStatements(oplog Oplog) ([]string, error) {
-	sql, err := p.parseJsonStruct(oplog)
+	sql, err := p.ParseJsonStruct(oplog)
 	if err != nil {
 		return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)
 	} else {
@@ -31,7 +33,7 @@ func (p *Parser) GetSqlStatements(oplog Oplog) ([]string, error) {
 	}
 }
 
-func (p *Parser) parseJsonStruct(oplog Oplog) ([]string, error) {
+func (p *Parser) ParseJsonStruct(oplog Oplog) ([]string, error) {
 	output := []string{}
 	switch oplog.Op {
 	case "i":

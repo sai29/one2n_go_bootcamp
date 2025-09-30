@@ -1,1 +1,25 @@
-CREATE SCHEMA student;, CREATE TABLE student.students (_id VARCHAR(255) PRIMARY KEY, age FLOAT, name VARCHAR(255), subject VARCHAR(255));, INSERT INTO student.students (_id, age, name, subject) VALUES ('64798c213f273a7ca2cf516a', 25, 'Nathan Lindgren', 'Maths');, INSERT INTO student.students (_id, age, name, subject) VALUES ('64798c213f273a7ca2cf516b', 18, 'Meggie Hoppe', 'English');, CREATE SCHEMA employee;, CREATE TABLE employee.employees (_id VARCHAR(255) PRIMARY KEY, age FLOAT, name VARCHAR(255), position VARCHAR(255), salary FLOAT);, INSERT INTO employee.employees (_id, age, name, position, salary) VALUES ('64798c213f273a7ca2cf516c', 35, 'Raymond Monahan', 'Engineer', 3767.925634753098);, CREATE TABLE employee.employees_address (_id VARCHAR(255) PRIMARY KEY, employees__id VARCHAR(255), line1 VARCHAR(255), zip VARCHAR(255));, INSERT INTO employee.employees_address (_id, employees__id, line1, zip) VALUES ('lI3C0ywXtN6KnNwJ', '64798c213f273a7ca2cf516c', '32550 Port Gatewaytown', '18399');, INSERT INTO employee.employees_address (_id, employees__id, line1, zip) VALUES ('DbFtx4hYrJukFlIO', '64798c213f273a7ca2cf516c', '3840 Cornermouth', '83941');, CREATE TABLE employee.employees_phone (_id VARCHAR(255) PRIMARY KEY, employees__id VARCHAR(255), personal VARCHAR(255), work VARCHAR(255));, INSERT INTO employee.employees_phone (_id, employees__id, personal, work) VALUES ('2IAgiPuHmGuRM8Rv', '64798c213f273a7ca2cf516c', '8764255212', '2762135091');, DELETE FROM student.students WHERE _id = '64798c213f273a7ca2cf516a';, UPDATE employee.employees SET age = 23 WHERE _id = '64798c213f273a7ca2cf5171';
+
+
+CREATE SCHEMA test;, CREATE TABLE test.student (_id VARCHAR(255) PRIMARY KEY, is_graduated BOOLEAN, name VARCHAR(255));, INSERT INTO test.student (_id, is_graduated, name) VALUES ('debug34', true, 'Debug User 4');
+
+CREATE SCHEMA test;, CREATE TABLE test.student (_id VARCHAR(255) PRIMARY KEY, is_graduated BOOLEAN, name VARCHAR(255));, INSERT INTO test.student (_id, is_graduated, name) VALUES ('debug35', true, 'Debug User 4');
+CREATE SCHEMA test;, CREATE TABLE test.student (_id VARCHAR(255) PRIMARY KEY, is_graduated BOOLEAN, name VARCHAR(255));, INSERT INTO test.student (_id, is_graduated, name) VALUES ('debug36', true, 'Debug User 4');
+CREATE SCHEMA test;, CREATE TABLE test.student (_id VARCHAR(255) PRIMARY KEY, is_graduated BOOLEAN, name VARCHAR(255));, INSERT INTO test.student (_id, is_graduated, name) VALUES ('debug37', true, 'Debug User 4');
+CREATE SCHEMA test;, CREATE TABLE test.student (_id VARCHAR(255) PRIMARY KEY, is_graduated BOOLEAN, name VARCHAR(255));, INSERT INTO test.student (_id, is_graduated, name) VALUES ('debug38', true, 'Debug User 4');
+CREATE SCHEMA test;, CREATE TABLE test.student (_id VARCHAR(255) PRIMARY KEY, is_graduated BOOLEAN, name VARCHAR(255));, INSERT INTO test.student (_id, is_graduated, name) VALUES ('debug39', true, 'Debug User 4');
+
+
+
+
+
+
+
+
+
+CREATE SCHEMA config;, CREATE TABLE config.system.sessions ();, INSERT INTO config.system.sessions () VALUES ();, INSERT INTO config.system.sessions () VALUES ();, INSERT INTO config.system.sessions () VALUES ();
+
+
+
+UPDATE test.student SET is_graduated = true WHERE _id = 'debug38';
+UPDATE test.student SET is_graduated = false WHERE _id = 'debug38';
+UPDATE test.student SET is_graduated = false WHERE _id = 'debug38';, CREATE SCHEMA test;, CREATE TABLE test.student (_id VARCHAR(255) PRIMARY KEY, is_graduated BOOLEAN, name VARCHAR(255), roll_no FLOAT);, INSERT INTO test.student (_id, is_graduated, name, roll_no) VALUES ('debug40', true, 'Debug User 4', 4);, CREATE TABLE test.student_address (_id VARCHAR(255) PRIMARY KEY, student__id VARCHAR(255), line1 VARCHAR(255), zip VARCHAR(255));, INSERT INTO test.student_address (_id, line1, student__id, zip) VALUES ('tcylHeGM87VgmxCx', '789 Elm', 'debug40', '33333');, INSERT INTO test.student_address (_id, line1, student__id, zip) VALUES ('3mlTU09ubHJg8OjY', '101 Maple', 'debug40', '44444');, CREATE TABLE test.student_phone (_id VARCHAR(255) PRIMARY KEY, student__id VARCHAR(255), personal VARCHAR(255), work VARCHAR(255));, INSERT INTO test.student_phone (_id, personal, student__id, work) VALUES ('b2AQVPdXE5KzjGAs', '11111', 'debug40', '22222');

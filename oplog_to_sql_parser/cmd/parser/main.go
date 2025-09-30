@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/config"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/input"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/output"
 
@@ -11,18 +16,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var flagCfg = &FlagConfig{}
-
-type FlagConfig struct {
-	InputFile  string
-	OutputFile string
-	InputUri   string
-	OutputUri  string
-}
+var flagCfg = &config.Config{}
 
 func init() {
 	rootCmd.Flags().StringVar(&flagCfg.InputFile, "input-file", "", "Input json oplog file")
 	rootCmd.Flags().StringVar(&flagCfg.OutputFile, "output-file", "", "Output sql file to write to")
+
+	rootCmd.Flags().StringVar(&flagCfg.InputUri, "input-uri", "", "Input json oplog uri")
+	rootCmd.Flags().StringVar(&flagCfg.OutputUri, "output-uri", "", "Output postgres db uri")
+
 }
 
 func main() {
@@ -37,19 +39,59 @@ var rootCmd = &cobra.Command{
 	Short: "Convert mongodb oplog to sql statements",
 	Long:  "Process json or direct streamed input from mongodb and convert it into sql statements or send them to a postgres db",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		parser := parser.NewParser()
-		// openFile(flagCfg.InputFile, parser)
 
+		programCtx := context.Background()
+		streamCtx, streamCancel := context.WithCancel(programCtx)
+
+		handleInterrupt(streamCancel)
+
+		flagCfg.OutputMethod = "file"
+		flagCfg.InputMethod = "db"
 		// sql, err := parser.decodeJSONString(oplogInsertJson)
+
+		if err := fetchSqlFromInputSource(streamCtx); err != nil {
+			fmt.Printf("Error from fetchSqlFromInputSource: %s", err)
+			return err
+		}
+
+		return nil
+	},
+}
+
+func handleInterrupt(cancel context.CancelFunc) {
+
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-interrupt
+		fmt.Println("Shutting down program...")
+		cancel()
+	}()
+}
+
+func fetchSqlFromInputSource(streamCtx context.Context) error {
+	parser := parser.NewParser()
+
+	switch flagCfg.InputMethod {
+	case "file":
 		sql, err := input.OpenFile(flagCfg.InputFile, parser)
 
 		if err != nil {
 			return err
 		} else {
-			// fmt.Println("rootCmd sql is ->", sql)
-			output.WriteToFileActions(sql, flagCfg.OutputFile)
-
+			output.WriteToOutput(sql, flagCfg)
 		}
 		return nil
-	},
+	case "db":
+		sql, err := input.MongoDBConnActions(streamCtx, flagCfg, parser)
+		fmt.Println("Sql is ->", sql)
+
+		if err != nil {
+			return err
+		} else {
+			output.WriteToOutput(sql, flagCfg)
+		}
+	}
+	return nil
 }
