@@ -138,7 +138,7 @@ func (c *totalCounter) updateTotalCount(fileCount *fileCount) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.words += fileCount.chars
+	c.words += fileCount.words
 	c.lines += fileCount.lines
 	c.chars += fileCount.chars
 }
