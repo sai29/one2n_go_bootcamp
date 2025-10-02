@@ -14,8 +14,16 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
-func MongoDBConnActions(ctx context.Context, config *config.Config, p *parser.Parser) ([]string, error) {
+type MongoReader struct {
+	uri string
+}
 
+func NewMongoReader(uri string) *MongoReader {
+	return &MongoReader{uri: uri}
+}
+
+func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p *parser.Parser) ([]string, error) {
+	// connString := "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
 	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"))
 	if err != nil {
 		return []string{}, err
@@ -72,7 +80,7 @@ func ReadOplogLatest(client *mongo.Client) (bson.RawValue, error) {
 	var doc struct {
 		Ts bson.RawValue `bson:"ts"`
 	}
-	// var doc bson.M
+
 	err := oplog.FindOne(ctx, bson.M{}, opts).Decode(&doc)
 	if err != nil {
 		return bson.RawValue{}, fmt.Errorf("find latest oplog entry failed: %w", err)
@@ -115,12 +123,6 @@ func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p *parser.Parser, 
 		}
 		if cursor.TryNext(context.TODO()) {
 
-			// var rawDoc bson.M
-			// if err := cursor.Decode(&rawDoc); err != nil {
-			// 	fmt.Println("failed to decode oplog entry into bson.M:", err)
-			// 	continue
-			// }
-			// fmt.Printf("Raw oplog doc: %+v\n", rawDoc)
 			var data bson.M
 			if err := cursor.Decode(&data); err != nil {
 				fmt.Println("failed to decode oplog entry:", err)
@@ -168,25 +170,3 @@ func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p *parser.Parser, 
 	return allSql, nil
 
 }
-
-// func toParserOplog(raw parser.Oplog) (parser.Oplog, error) {
-// 	// fmt.Printf("raw is %+v\n", raw)
-// 	var oMap map[string]interface{}
-// 	// if err := bson.Unmarshal(raw.O, &oMap); err != nil {
-// 	// 	fmt.Println("error unmarsha raw.o ->", err)
-// 	// 	return parser.Oplog{}, err
-// 	// }
-
-// 	// var o2Map map[string]interface{}
-// 	// if err := bson.Unmarshal(raw.O2, &o2Map); err != nil {
-// 	// 	fmt.Println("error unmarsha raw.o2 ->", err)
-// 	// 	return parser.Oplog{}, err
-// 	// }
-
-// 	return parser.Oplog{
-// 		Op:            raw.Op,
-// 		Namespace:     raw.Ns,
-// 		Record:        oMap,
-// 		UpdateColumns: o2Map,
-// 	}, nil
-// }

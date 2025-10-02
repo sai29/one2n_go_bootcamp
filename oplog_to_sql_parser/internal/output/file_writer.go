@@ -4,18 +4,33 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/config"
 )
 
-func WriteToOutput(sql []string, flagCfg *config.Config) {
-	switch flagCfg.OutputMethod {
-	case "file":
-		WriteToFileActions(sql, flagCfg.OutputFile)
+type FileWriter struct {
+	uri string
+}
 
-	case "db":
-		WriteToDbActions([]string{}, flagCfg.InputUri)
+func NewFileWriter(uri string) *FileWriter {
+	return &FileWriter{uri: uri}
+}
+
+func (fr *FileWriter) Write(sql []string) error {
+	var file *os.File
+	var err error
+	file, err = openOrCreateFile(fr.uri)
+	if err != nil {
+		fmt.Println("Error creating file", err)
+		return err
 	}
+	defer file.Close()
+
+	_, err = file.WriteString(strings.Join(sql, ";\n") + ";\n")
+	if err != nil {
+		fmt.Printf("error writing to output file -> %v\n", err)
+		return err
+	}
+	return nil
+
 }
 
 func openOrCreateFile(fileName string) (*os.File, error) {
@@ -24,20 +39,4 @@ func openOrCreateFile(fileName string) (*os.File, error) {
 		fmt.Printf("Error opening/creating file -> %s\n err: %s", fileName, err)
 	}
 	return file, nil
-}
-
-func WriteToFileActions(sql []string, fileName string) {
-	var file *os.File
-	var err error
-	file, err = openOrCreateFile(fileName)
-	if err != nil {
-		fmt.Println("Error creating file", err)
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(strings.Join(sql, ", ") + "\n")
-	if err != nil {
-		fmt.Printf("error writing to output file -> %v\n", err)
-	}
-
 }

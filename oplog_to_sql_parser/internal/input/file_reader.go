@@ -1,16 +1,26 @@
 package input
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/config"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
 )
 
-func OpenFile(fileName string, p *parser.Parser) ([]string, error) {
+type FileReader struct {
+	filePath string
+}
+
+func NewFileReader(filePath string) *FileReader {
+	return &FileReader{filePath: filePath}
+}
+
+func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *parser.Parser) ([]string, error) {
 	// var input io.Reader
-	file, err := os.Open(fileName)
+	file, err := os.Open(config.InputFile)
 	if err != nil {
 		return []string{}, fmt.Errorf("error opening the file")
 	}

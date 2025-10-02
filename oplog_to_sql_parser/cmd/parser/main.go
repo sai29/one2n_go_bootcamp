@@ -59,7 +59,6 @@ var rootCmd = &cobra.Command{
 }
 
 func handleInterrupt(cancel context.CancelFunc) {
-
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 
@@ -72,26 +71,32 @@ func handleInterrupt(cancel context.CancelFunc) {
 
 func fetchSqlFromInputSource(streamCtx context.Context) error {
 	parser := parser.NewParser()
+	reader := createReader(flagCfg.InputFile, flagCfg.InputUri)
 
-	switch flagCfg.InputMethod {
-	case "file":
-		sql, err := input.OpenFile(flagCfg.InputFile, parser)
-
-		if err != nil {
-			return err
-		} else {
-			output.WriteToOutput(sql, flagCfg)
-		}
-		return nil
-	case "db":
-		sql, err := input.MongoDBConnActions(streamCtx, flagCfg, parser)
-		fmt.Println("Sql is ->", sql)
-
-		if err != nil {
-			return err
-		} else {
-			output.WriteToOutput(sql, flagCfg)
-		}
+	sql, err := reader.Read(streamCtx, flagCfg, parser)
+	if err != nil {
+		return err
 	}
+
+	writer := createWriter(flagCfg, sql)
+	writer.Write(sql)
+
 	return nil
+}
+
+func createReader(file, uri string) input.Reader {
+	if file != "" {
+		return input.NewFileReader(file)
+	}
+
+	return input.NewMongoReader(uri)
+
+}
+
+func createWriter(config *config.Config, sql []string) output.Writer {
+	if config.OutputFile != "" {
+		return output.NewFileWriter(config.OutputFile)
+	}
+
+	return output.NewPostgresWriter(config.OutputUri)
 }
