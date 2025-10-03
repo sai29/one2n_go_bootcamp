@@ -71,17 +71,37 @@ func handleInterrupt(cancel context.CancelFunc) {
 
 func fetchSqlFromInputSource(streamCtx context.Context) error {
 	parser := parser.NewParser()
+	sqlChan := make(chan []string)
+	errChan := make(chan error)
 	reader := createReader(flagCfg.InputFile, flagCfg.InputUri)
 
-	sql, err := reader.Read(streamCtx, flagCfg, parser)
-	if err != nil {
-		return err
+	fmt.Println("Before calling go routine ->")
+
+	go reader.Read(streamCtx, flagCfg, parser, sqlChan, errChan)
+
+	for {
+		select {
+		case err := <-errChan:
+			if err != nil {
+				return err
+			}
+		case sql, ok := <-sqlChan:
+			if !ok {
+				return fmt.Errorf("error from sql Statments channel")
+			}
+			fmt.Println("Receiving data ->", sql)
+			fmt.Println("Sending to writer ->")
+			writer := createWriter(flagCfg, sql)
+			writer.Write(sql)
+			return nil
+
+		}
 	}
 
-	writer := createWriter(flagCfg, sql)
-	writer.Write(sql)
-
-	return nil
+	// sql, err := reader.Read(streamCtx, flagCfg, parser, sqlChan, errChan)
+	// if err != nil {
+	// 	return err
+	// }
 }
 
 func createReader(file, uri string) input.Reader {
@@ -90,7 +110,6 @@ func createReader(file, uri string) input.Reader {
 	}
 
 	return input.NewMongoReader(uri)
-
 }
 
 func createWriter(config *config.Config, sql []string) output.Writer {

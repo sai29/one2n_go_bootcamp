@@ -8,5 +8,6 @@ import (
 )
 
 type Reader interface {
-	Read(streamCtx context.Context, cfg *config.Config, p *parser.Parser) ([]string, error)
+	Read(streamCtx context.Context, cfg *config.Config, p *parser.Parser,
+		sqlChan chan<- []string, errChan chan<- error)
 }

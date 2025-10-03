@@ -18,11 +18,14 @@ func NewFileReader(filePath string) *FileReader {
 	return &FileReader{filePath: filePath}
 }
 
-func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *parser.Parser) ([]string, error) {
+func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *parser.Parser,
+	sqlChan chan<- []string, errChan chan<- error) {
+	defer close(sqlChan)
+	defer close(errChan)
 	// var input io.Reader
 	file, err := os.Open(config.InputFile)
 	if err != nil {
-		return []string{}, fmt.Errorf("error opening the file")
+		errChan <- fmt.Errorf("error opening the file -> %v", err)
 	}
 
 	defer file.Close()
@@ -31,10 +34,10 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *
 
 	t, err := dec.Token()
 	if err != nil {
-		return []string{}, fmt.Errorf("error with json input")
+		errChan <- fmt.Errorf("error with json input -> %v", err)
 	}
 	if delim, ok := t.(json.Delim); !ok || delim != '[' {
-		return []string{}, fmt.Errorf("expected [ at start of JSON array")
+		errChan <- fmt.Errorf("expected [ at start of JSON array")
 	}
 
 	sqlStatements := []string{}
@@ -42,13 +45,13 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *
 	for dec.More() {
 		var entry parser.Oplog
 		if err := dec.Decode(&entry); err != nil {
-			return []string{}, fmt.Errorf("error decoding json into Oplog struct")
+			errChan <- fmt.Errorf("error decoding json into Oplog struct")
 
 		} else {
 			// fmt.Printf("%+v\n", entry)
 			sql, err := p.GetSqlStatements(entry)
 			if err != nil {
-				return []string{}, err
+				errChan <- fmt.Errorf("error from GetSqlStatements -> %v", err)
 
 			} else {
 				sqlStatements = append(sqlStatements, sql...)
@@ -59,12 +62,14 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *
 
 	t, err = dec.Token()
 	if err != nil {
-		return []string{}, err
+		errChan <- fmt.Errorf("%v", err)
 	}
 
 	if delim, ok := t.(json.Delim); !ok || delim != ']' {
-		return []string{}, fmt.Errorf("expected ] at the end of JSON array")
+		errChan <- fmt.Errorf("expected ] at the end of JSON array")
 	}
-	return sqlStatements, nil
+
+	fmt.Println("Sending data via sqlChan to main")
+	sqlChan <- sqlStatements
 
 }

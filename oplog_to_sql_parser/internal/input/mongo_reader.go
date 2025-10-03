@@ -22,40 +22,42 @@ func NewMongoReader(uri string) *MongoReader {
 	return &MongoReader{uri: uri}
 }
 
-func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p *parser.Parser) ([]string, error) {
+func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p *parser.Parser,
+	sqlChan chan<- []string, errChan chan<- error) {
 	// connString := "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
+
+	defer close(sqlChan)
+	defer close(errChan)
 	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"))
 	if err != nil {
-		return []string{}, err
+		errChan <- fmt.Errorf("error connections to mongo client -> %v", err)
 	}
 
 	defer func() {
 		if err := client.Disconnect(ctx); err != nil {
-			fmt.Println("disconnect from mongo db")
+			errChan <- fmt.Errorf("disconnect from monogdb -> %v", err)
 		}
 	}()
 
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
 		fmt.Println("error with ping to mongo database")
-		fmt.Println("ping err ->", err)
-		return nil, err
+		errChan <- fmt.Errorf("ping err -> %v", err)
 	}
 
 	dbs, err := client.ListDatabaseNames(ctx, bson.M{})
 	if err != nil {
-		return nil, fmt.Errorf("list databases failed: %w", err)
+		errChan <- fmt.Errorf("list databases failed: %v", err)
 	}
 
 	fmt.Println("Databases:", dbs)
 	startTs, err := ReadOplogLatest(client)
 	if err != nil {
-
-		return nil, fmt.Errorf("failed to get latest ts from oplog: %w", err)
+		errChan <- fmt.Errorf("error getting latest Ts from oplog -> %v", err)
 	}
 
 	cursor, err := OpenTailableCursor(ctx, client, startTs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open tailable cursor: %w", err)
+		errChan <- fmt.Errorf("failed to open tailable cursor: %w", err)
 	}
 
 	defer cursor.Close(ctx)
@@ -63,11 +65,11 @@ func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p *parse
 	sql, err := ProcessOplogs(ctx, cursor, p, config)
 	fmt.Println("MongoDBConnActions is ->", sql, err)
 	if err != nil {
-		fmt.Println("Are we entering here? error land")
-		return nil, fmt.Errorf("oplog processing failed: %w", err)
+		errChan <- fmt.Errorf("oplog processing failed: %w", err)
 	}
 
-	return sql, nil
+	sqlChan <- sql
+
 }
 
 func ReadOplogLatest(client *mongo.Client) (bson.RawValue, error) {
