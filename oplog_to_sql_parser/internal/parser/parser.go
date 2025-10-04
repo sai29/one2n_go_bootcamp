@@ -71,7 +71,6 @@ func (p *Parser) ParseJsonStruct(oplog Oplog) ([]string, error) {
 			return output, nil
 
 		}
-
 	case "d":
 		deleteSql, err := deleteSql(oplog)
 		if err != nil {
@@ -79,7 +78,6 @@ func (p *Parser) ParseJsonStruct(oplog Oplog) ([]string, error) {
 		} else {
 			output = append(output, deleteSql)
 			return output, nil
-
 		}
 
 	default:

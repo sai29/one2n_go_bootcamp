@@ -87,21 +87,14 @@ func fetchSqlFromInputSource(streamCtx context.Context) error {
 			}
 		case sql, ok := <-sqlChan:
 			if !ok {
-				return fmt.Errorf("error from sql Statments channel")
+				return nil
 			}
-			fmt.Println("Receiving data ->", sql)
-			fmt.Println("Sending to writer ->")
+			fmt.Println("Receiving data ->")
+			// fmt.Println("Sending to writer ->")
 			writer := createWriter(flagCfg, sql)
 			writer.Write(sql)
-			return nil
-
 		}
 	}
-
-	// sql, err := reader.Read(streamCtx, flagCfg, parser, sqlChan, errChan)
-	// if err != nil {
-	// 	return err
-	// }
 }
 
 func createReader(file, uri string) input.Reader {

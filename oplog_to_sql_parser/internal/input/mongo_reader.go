@@ -62,13 +62,10 @@ func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p *parse
 
 	defer cursor.Close(ctx)
 
-	sql, err := ProcessOplogs(ctx, cursor, p, config)
-	fmt.Println("MongoDBConnActions is ->", sql, err)
+	err = ProcessOplogs(ctx, cursor, p, config, sqlChan)
 	if err != nil {
 		errChan <- fmt.Errorf("oplog processing failed: %w", err)
 	}
-
-	sqlChan <- sql
 
 }
 
@@ -112,34 +109,35 @@ func OpenTailableCursor(ctx context.Context, client *mongo.Client, startTs bson.
 
 }
 
-func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p *parser.Parser, config *config.Config) ([]string, error) {
+func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p *parser.Parser, config *config.Config,
+	sqlChan chan<- []string) error {
 
-	var allSql []string
 	fmt.Println("Entering here")
 	for {
 		select {
 		case <-ctx.Done():
 			fmt.Println("Context cancelled, stopping oplog processing")
-			return allSql, nil
+			return nil
 		default:
 		}
-		if cursor.TryNext(context.TODO()) {
+		if cursor.TryNext(ctx) {
 
 			var data bson.M
 			if err := cursor.Decode(&data); err != nil {
 				fmt.Println("failed to decode oplog entry:", err)
-				panic(err)
+				continue
 			}
 
 			jsonData, err := json.Marshal(data)
 			if err != nil {
-				panic(err)
+				fmt.Println("failed to marshal json", err)
+				continue
 			}
 
 			var entry parser.Oplog
 			err = json.Unmarshal(jsonData, &entry)
 			if err != nil {
-				return []string{}, err
+				fmt.Println("failed to unmarshal json", err)
 			}
 
 			switch entry.Op {
@@ -151,8 +149,7 @@ func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p *parser.Parser, 
 					continue
 				}
 
-				allSql = append(allSql, sql...)
-
+				sqlChan <- sql
 			default:
 				continue
 			}
@@ -160,7 +157,7 @@ func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p *parser.Parser, 
 
 		if err := cursor.Err(); err != nil {
 			fmt.Printf("error from cursor returning...err -> %s", err)
-			return allSql, fmt.Errorf("cursor error: %w", err)
+			return fmt.Errorf("cursor error: %w", err)
 		}
 
 		if cursor.ID() == 0 {
@@ -169,6 +166,6 @@ func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p *parser.Parser, 
 		}
 
 	}
-	return allSql, nil
+	return nil
 
 }

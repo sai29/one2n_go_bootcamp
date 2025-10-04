@@ -20,9 +20,10 @@ func NewFileReader(filePath string) *FileReader {
 
 func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *parser.Parser,
 	sqlChan chan<- []string, errChan chan<- error) {
+
 	defer close(sqlChan)
 	defer close(errChan)
-	// var input io.Reader
+
 	file, err := os.Open(config.InputFile)
 	if err != nil {
 		errChan <- fmt.Errorf("error opening the file -> %v", err)
@@ -40,13 +41,11 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *
 		errChan <- fmt.Errorf("expected [ at start of JSON array")
 	}
 
-	sqlStatements := []string{}
-
 	for dec.More() {
 		var entry parser.Oplog
 		if err := dec.Decode(&entry); err != nil {
 			errChan <- fmt.Errorf("error decoding json into Oplog struct")
-
+			continue
 		} else {
 			// fmt.Printf("%+v\n", entry)
 			sql, err := p.GetSqlStatements(entry)
@@ -54,8 +53,8 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *
 				errChan <- fmt.Errorf("error from GetSqlStatements -> %v", err)
 
 			} else {
-				sqlStatements = append(sqlStatements, sql...)
-
+				fmt.Println("Sending sql via channel")
+				sqlChan <- sql
 			}
 		}
 	}
@@ -68,8 +67,5 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *
 	if delim, ok := t.(json.Delim); !ok || delim != ']' {
 		errChan <- fmt.Errorf("expected ] at the end of JSON array")
 	}
-
-	fmt.Println("Sending data via sqlChan to main")
-	sqlChan <- sqlStatements
 
 }
