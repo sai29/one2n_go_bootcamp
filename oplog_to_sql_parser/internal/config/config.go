@@ -12,13 +12,22 @@ const (
 	OutputDb   OutputMethod = "db"
 )
 
-var flagCfg = &Config{}
-
 type Config struct {
-	InputFile    string
-	OutputFile   string
-	InputUri     string
-	OutputUri    string
-	InputMethod  InputMethod
-	OutputMethod OutputMethod
+	Input struct {
+		InputFile   string
+		InputUri    string
+		InputMethod InputMethod
+	}
+	Output struct {
+		OutputFile   string
+		OutputUri    string
+		OutputMethod OutputMethod
+	}
+
+	Db struct {
+		Dsn          string
+		MaxOpenConns int
+		MaxIdleConns int
+		MaxIdleTime  string
+	}
 }

@@ -19,12 +19,12 @@ func NewFileReader(filePath string) *FileReader {
 }
 
 func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *parser.Parser,
-	sqlChan chan<- []string, errChan chan<- error) {
+	sqlChan chan<- string, errChan chan<- error) {
 
 	defer close(sqlChan)
 	defer close(errChan)
 
-	file, err := os.Open(config.InputFile)
+	file, err := os.Open(config.Input.InputFile)
 	if err != nil {
 		errChan <- fmt.Errorf("error opening the file -> %v", err)
 	}
@@ -53,8 +53,11 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *
 				errChan <- fmt.Errorf("error from GetSqlStatements -> %v", err)
 
 			} else {
-				fmt.Println("Sending sql via channel")
-				sqlChan <- sql
+
+				for _, stmt := range sql {
+					fmt.Println("Sending sql via channel")
+					sqlChan <- stmt
+				}
 			}
 		}
 	}

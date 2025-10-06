@@ -9,5 +9,5 @@ import (
 
 type Reader interface {
 	Read(streamCtx context.Context, cfg *config.Config, p *parser.Parser,
-		sqlChan chan<- []string, errChan chan<- error)
+		sqlChan chan<- string, errChan chan<- error)
 }

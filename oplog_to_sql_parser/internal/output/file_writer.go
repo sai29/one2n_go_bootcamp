@@ -3,7 +3,6 @@ package output
 import (
 	"fmt"
 	"os"
-	"strings"
 )
 
 type FileWriter struct {
@@ -14,7 +13,7 @@ func NewFileWriter(uri string) *FileWriter {
 	return &FileWriter{uri: uri}
 }
 
-func (fr *FileWriter) Write(sql []string) error {
+func (fr *FileWriter) Write(sql string) error {
 	var file *os.File
 	var err error
 	file, err = openOrCreateFile(fr.uri)
@@ -24,7 +23,7 @@ func (fr *FileWriter) Write(sql []string) error {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(strings.Join(sql, ";\n") + ";\n")
+	_, err = file.WriteString(sql + "\n")
 	if err != nil {
 		fmt.Printf("error writing to output file -> %v\n", err)
 		return err

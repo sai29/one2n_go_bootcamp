@@ -19,11 +19,11 @@ import (
 var flagCfg = &config.Config{}
 
 func init() {
-	rootCmd.Flags().StringVar(&flagCfg.InputFile, "input-file", "", "Input json oplog file")
-	rootCmd.Flags().StringVar(&flagCfg.OutputFile, "output-file", "", "Output sql file to write to")
+	rootCmd.Flags().StringVar(&flagCfg.Input.InputFile, "input-file", "", "Input json oplog file")
+	rootCmd.Flags().StringVar(&flagCfg.Output.OutputFile, "output-file", "", "Output sql file to write to")
 
-	rootCmd.Flags().StringVar(&flagCfg.InputUri, "input-uri", "", "Input json oplog uri")
-	rootCmd.Flags().StringVar(&flagCfg.OutputUri, "output-uri", "", "Output postgres db uri")
+	rootCmd.Flags().StringVar(&flagCfg.Input.InputUri, "input-uri", "", "Input json oplog uri")
+	rootCmd.Flags().StringVar(&flagCfg.Output.OutputUri, "output-uri", "", "Output postgres db uri")
 
 }
 
@@ -45,8 +45,8 @@ var rootCmd = &cobra.Command{
 
 		handleInterrupt(streamCancel)
 
-		flagCfg.OutputMethod = "file"
-		flagCfg.InputMethod = "db"
+		flagCfg.Output.OutputMethod = "file"
+		flagCfg.Input.InputMethod = "file"
 		// sql, err := parser.decodeJSONString(oplogInsertJson)
 
 		if err := fetchSqlFromInputSource(streamCtx); err != nil {
@@ -70,10 +70,11 @@ func handleInterrupt(cancel context.CancelFunc) {
 }
 
 func fetchSqlFromInputSource(streamCtx context.Context) error {
+
 	parser := parser.NewParser()
-	sqlChan := make(chan []string)
+	sqlChan := make(chan string)
 	errChan := make(chan error)
-	reader := createReader(flagCfg.InputFile, flagCfg.InputUri)
+	reader := createReader(flagCfg.Input.InputFile, flagCfg.Input.InputUri)
 
 	fmt.Println("Before calling go routine ->")
 
@@ -91,6 +92,7 @@ func fetchSqlFromInputSource(streamCtx context.Context) error {
 			}
 			fmt.Println("Receiving data ->")
 			// fmt.Println("Sending to writer ->")
+
 			writer := createWriter(flagCfg, sql)
 			writer.Write(sql)
 		}
@@ -105,10 +107,10 @@ func createReader(file, uri string) input.Reader {
 	return input.NewMongoReader(uri)
 }
 
-func createWriter(config *config.Config, sql []string) output.Writer {
-	if config.OutputFile != "" {
-		return output.NewFileWriter(config.OutputFile)
+func createWriter(config *config.Config, sql string) output.Writer {
+	if config.Output.OutputFile != "" {
+		return output.NewFileWriter(config.Output.OutputFile)
 	}
 
-	return output.NewPostgresWriter(config.OutputUri)
+	return output.NewPostgresWriter(config.Output.OutputUri)
 }

@@ -8,6 +8,6 @@ func NewPostgresWriter(uri string) *PostgresWriter {
 	return &PostgresWriter{uri: uri}
 }
 
-func (mr *PostgresWriter) Write(sql []string) error {
+func (mr *PostgresWriter) Write(sql string) error {
 	return nil
 }

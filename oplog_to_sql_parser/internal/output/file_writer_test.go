@@ -12,7 +12,7 @@ func TestFileWriter_Write(t *testing.T) {
 		// Named input parameters for receiver constructor.
 		uri string
 		// Named input parameters for target function.
-		sql     []string
+		sql     string
 		wantErr bool
 	}{
 		// TODO: Add test cases.
