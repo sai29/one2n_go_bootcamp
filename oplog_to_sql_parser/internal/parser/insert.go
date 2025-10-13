@@ -47,7 +47,6 @@ func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
 	}
 
 	output = append(output, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", oplog.Namespace, strings.Join(columns, ", "), strings.Join(insertValues, ", ")))
-
 	return output, nil
 }
 
@@ -88,6 +87,5 @@ func (p *Parser) linkedInsertSql(parentIdColumn string, parentId string, linkedT
 	}
 
 	output := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", linkedTableName, strings.Join(p.tableSchemas[linkedTableName], ", "), strings.Join(insertValues, ", "))
-
 	return output, nil
 }

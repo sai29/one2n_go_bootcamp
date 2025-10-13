@@ -3,6 +3,7 @@ module github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser
 go 1.23.3
 
 require (
+	github.com/lib/pq v1.10.9
 	github.com/spf13/cobra v1.10.1
 	go.mongodb.org/mongo-driver/v2 v2.3.0
 )

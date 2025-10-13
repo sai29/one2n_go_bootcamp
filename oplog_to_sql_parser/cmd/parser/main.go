@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/config"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/input"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/output"
-
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
 
 	"github.com/spf13/cobra"
@@ -45,8 +45,8 @@ var rootCmd = &cobra.Command{
 
 		handleInterrupt(streamCancel)
 
-		flagCfg.Output.OutputMethod = "file"
-		flagCfg.Input.InputMethod = "file"
+		flagCfg.Output.OutputMethod = "db"
+		flagCfg.Input.InputMethod = "db"
 		// sql, err := parser.decodeJSONString(oplogInsertJson)
 
 		if err := fetchSqlFromInputSource(streamCtx); err != nil {
@@ -72,45 +72,47 @@ func handleInterrupt(cancel context.CancelFunc) {
 func fetchSqlFromInputSource(streamCtx context.Context) error {
 
 	parser := parser.NewParser()
-	sqlChan := make(chan string)
+	sqlChan := make(chan input.SqlStatement)
 	errChan := make(chan error)
 	reader := createReader(flagCfg.Input.InputFile, flagCfg.Input.InputUri)
 
-	fmt.Println("Before calling go routine ->")
+	// fmt.Println("Start fetchSqlFromInputSource")
+	writer := createWriter(flagCfg)
+	var wg sync.WaitGroup
 
-	go reader.Read(streamCtx, flagCfg, parser, sqlChan, errChan)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		go reader.Read(streamCtx, flagCfg, parser, sqlChan, errChan)
+	}()
 
-	for {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				return err
-			}
-		case sql, ok := <-sqlChan:
-			if !ok {
-				return nil
-			}
-			fmt.Println("Receiving data ->")
-			// fmt.Println("Sending to writer ->")
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		writer.Write(streamCtx, sqlChan, errChan)
+	}()
 
-			writer := createWriter(flagCfg, sql)
-			writer.Write(sql)
+	go func() {
+		for error := range errChan {
+			fmt.Printf("error from error channel -> %s\n", error)
 		}
-	}
+	}()
+
+	wg.Wait()
+
+	return nil
 }
 
 func createReader(file, uri string) input.Reader {
 	if file != "" {
 		return input.NewFileReader(file)
 	}
-
 	return input.NewMongoReader(uri)
 }
 
-func createWriter(config *config.Config, sql string) output.Writer {
-	if config.Output.OutputFile != "" {
+func createWriter(config *config.Config) output.Writer {
+	if config.Output.OutputMethod == "file" && config.Output.OutputFile != "" {
 		return output.NewFileWriter(config.Output.OutputFile)
 	}
-
 	return output.NewPostgresWriter(config.Output.OutputUri)
 }

@@ -38,24 +38,16 @@ func (p *Parser) ParseJsonStruct(oplog Oplog) ([]string, error) {
 	switch oplog.Op {
 	case "i":
 
-		if !p.createdTables[oplog.Namespace] {
-			p.saveCurrentTableColumns(oplog.Record, oplog.Namespace)
+		p.saveCurrentTableColumns(oplog.Record, oplog.Namespace)
 
-			createSchema := p.createSchemaAndTable(oplog)
-			p.createdTables[oplog.Namespace] = true
-			output = append(output, createSchema...)
+		statements := p.createSchemaAndTable(oplog)
+		output = append(output, statements["main_table"]...)
 
-		}
 		insertSql, err := p.insertSql(oplog)
 
 		if err == nil {
 			output = append(output, insertSql...)
-
-			if len(p.linkedTableStatements) != 0 {
-				for _, value := range p.linkedTableStatements {
-					output = append(output, value...)
-				}
-			}
+			output = append(output, statements["linked_table"]...)
 			return output, nil
 
 		} else {
