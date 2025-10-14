@@ -45,8 +45,8 @@ var rootCmd = &cobra.Command{
 
 		handleInterrupt(streamCancel)
 
-		flagCfg.Output.OutputMethod = "db"
-		flagCfg.Input.InputMethod = "db"
+		flagCfg.Output.OutputMethod = "file"
+		flagCfg.Input.InputMethod = "file"
 		// sql, err := parser.decodeJSONString(oplogInsertJson)
 
 		if err := fetchSqlFromInputSource(streamCtx); err != nil {

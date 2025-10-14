@@ -13,6 +13,6 @@ type SqlStatement struct {
 }
 
 type Reader interface {
-	Read(streamCtx context.Context, cfg *config.Config, p *parser.Parser,
+	Read(streamCtx context.Context, cfg *config.Config, p parser.Parser,
 		sqlChan chan<- SqlStatement, errChan chan<- error)
 }

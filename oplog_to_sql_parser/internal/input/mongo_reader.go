@@ -22,7 +22,7 @@ func NewMongoReader(uri string) *MongoReader {
 	return &MongoReader{uri: uri}
 }
 
-func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p *parser.Parser,
+func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p parser.Parser,
 	sqlChan chan<- SqlStatement, errChan chan<- error) {
 	// connString := "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
 
@@ -109,7 +109,7 @@ func OpenTailableCursor(ctx context.Context, client *mongo.Client, startTs bson.
 
 }
 
-func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p *parser.Parser, config *config.Config,
+func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p parser.Parser, config *config.Config,
 	sqlChan chan<- SqlStatement) error {
 
 	fmt.Println("Entering here")

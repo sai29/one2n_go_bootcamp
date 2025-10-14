@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
-	output, insertValues := []string{}, []string{}
+func (p *parser) checkForNewColumns(oplog Oplog) ([]string, []string) {
+	alterStmts := []string{}
 
 	for key, value := range oplog.Record {
-
+		// Check if column already exists and not nested
 		if !slices.Contains(p.tableSchemas[oplog.Namespace], key) && !nestedDocument(value) {
 			p.tableSchemas[oplog.Namespace] = append(p.tableSchemas[oplog.Namespace], key)
 			alterColumnType := ""
@@ -22,14 +22,20 @@ func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
 			case float64, int:
 				alterColumnType = "FLOAT"
 			}
-			output = append(output, fmt.Sprintf("ALTER TABLE %s ADD %s %s;", oplog.Namespace, key, alterColumnType))
+			alterStmts = append(alterStmts, fmt.Sprintf("ALTER TABLE %s ADD %s %s;", oplog.Namespace, key, alterColumnType))
 		}
 	}
 
 	columns := append([]string{}, p.tableSchemas[oplog.Namespace]...)
 	slices.Sort(columns)
+	return alterStmts, columns
 
-	for _, column := range columns {
+}
+
+func insertSql(oplog Oplog, insertColumns []string) ([]string, error) {
+	insertStmts, insertValues := []string{}, []string{}
+
+	for _, column := range insertColumns {
 
 		if value, ok := oplog.Record[column]; ok {
 			switch v := value.(type) {
@@ -46,11 +52,11 @@ func (p *Parser) insertSql(oplog Oplog) ([]string, error) {
 		}
 	}
 
-	output = append(output, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", oplog.Namespace, strings.Join(columns, ", "), strings.Join(insertValues, ", ")))
-	return output, nil
+	insertStmts = append(insertStmts, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", oplog.Namespace, strings.Join(insertColumns, ", "), strings.Join(insertValues, ", ")))
+	return insertStmts, nil
 }
 
-func (p *Parser) linkedInsertSql(parentIdColumn string, parentId string, linkedTableName string, record interface{}) (string, error) {
+func (p *parser) linkedInsertSql(parentIdColumn string, parentId string, linkedTableName string, record interface{}) (string, error) {
 
 	insertValues := []string{}
 

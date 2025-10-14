@@ -4,7 +4,13 @@ import (
 	"fmt"
 )
 
-type Parser struct {
+type Parser interface {
+	GetSqlStatements(oplog Oplog) ([]string, error)
+	ParseJsonStruct(oplog Oplog) ([]string, error)
+	saveCurrentTableColumns(record any, tableName string)
+}
+
+type parser struct {
 	createdTables         map[string]bool
 	tableSchemas          map[string][]string
 	linkedTableStatements map[string][]string
@@ -19,12 +25,12 @@ type Oplog struct {
 	TableCreated  bool
 }
 
-func NewParser() *Parser {
-	return &Parser{createdTables: make(map[string]bool), tableSchemas: make(map[string][]string),
+func NewParser() Parser {
+	return &parser{createdTables: make(map[string]bool), tableSchemas: make(map[string][]string),
 		linkedTableStatements: make(map[string][]string), IdGenerator: randString}
 }
 
-func (p *Parser) GetSqlStatements(oplog Oplog) ([]string, error) {
+func (p *parser) GetSqlStatements(oplog Oplog) ([]string, error) {
 	sql, err := p.ParseJsonStruct(oplog)
 	if err != nil {
 		return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)
@@ -33,7 +39,7 @@ func (p *Parser) GetSqlStatements(oplog Oplog) ([]string, error) {
 	}
 }
 
-func (p *Parser) ParseJsonStruct(oplog Oplog) ([]string, error) {
+func (p *parser) ParseJsonStruct(oplog Oplog) ([]string, error) {
 	output := []string{}
 	switch oplog.Op {
 	case "i":
@@ -43,7 +49,10 @@ func (p *Parser) ParseJsonStruct(oplog Oplog) ([]string, error) {
 		statements := p.createSchemaAndTable(oplog)
 		output = append(output, statements["main_table"]...)
 
-		insertSql, err := p.insertSql(oplog)
+		alterStmts, insertColumns := p.checkForNewColumns(oplog)
+		output = append(output, alterStmts...)
+
+		insertSql, err := insertSql(oplog, insertColumns)
 
 		if err == nil {
 			output = append(output, insertSql...)
@@ -54,8 +63,9 @@ func (p *Parser) ParseJsonStruct(oplog Oplog) ([]string, error) {
 			fmt.Println("Error in insert sql is ->", err)
 			return []string{}, err
 		}
+
 	case "u":
-		updateSql, err := p.updateSql(oplog)
+		updateSql, err := updateSql(oplog)
 		if err != nil {
 			return []string{}, err
 		} else {

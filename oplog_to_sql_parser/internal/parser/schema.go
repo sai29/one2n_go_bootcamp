@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (p *Parser) saveCurrentTableColumns(record any, tableName string) {
+func (p *parser) saveCurrentTableColumns(record any, tableName string) {
 
 	if !p.createdTables[tableName] {
 
@@ -27,7 +27,7 @@ func (p *Parser) saveCurrentTableColumns(record any, tableName string) {
 	}
 }
 
-func (p *Parser) createSchemaAndTable(oplog Oplog) map[string][]string {
+func (p *parser) createSchemaAndTable(oplog Oplog) map[string][]string {
 	output := make(map[string][]string)
 	columns := []string{}
 
@@ -68,7 +68,7 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) map[string][]string {
 
 				//Nested table CREATE
 
-				fmt.Printf("Nested nestedColumn is -> +%v\n", nestedValue)
+				// fmt.Printf("Nested nestedColumn is -> +%v\n", nestedValue)
 
 				if !p.createdTables[linkedTableName] {
 					linkedTableCreate, err := p.createLinkedTable(oplog.Namespace, nestedColumn, nestedValue[0])
@@ -145,14 +145,14 @@ func (p *Parser) createSchemaAndTable(oplog Oplog) map[string][]string {
 	return output
 }
 
-func (p *Parser) interfaceToStatements(oplog Oplog, tableName string, i interface{}) string {
+func (p *parser) interfaceToStatements(oplog Oplog, tableName string, i interface{}) string {
 	tableNameWithSchema := fmt.Sprintf("%s_%s", oplog.Namespace, tableName)
 	parentId, ok := oplog.Record["_id"].(string)
 	parentIdColumn := strings.Split(oplog.Namespace, ".")[1]
 
 	if ok {
 		linkedTableInserts, err := p.linkedInsertSql(fmt.Sprintf("%s__id", parentIdColumn), parentId, tableNameWithSchema, i)
-		fmt.Println("Linked table inserts is", linkedTableInserts)
+		// fmt.Println("Linked table inserts is", linkedTableInserts)
 		if err != nil {
 			fmt.Println("Error generating insert statements for linked tables", err)
 		} else {
@@ -162,7 +162,7 @@ func (p *Parser) interfaceToStatements(oplog Oplog, tableName string, i interfac
 	return ""
 }
 
-func (p *Parser) createLinkedTable(nameSpace string, tableName string, data interface{}) (string, error) {
+func (p *parser) createLinkedTable(nameSpace string, tableName string, data interface{}) (string, error) {
 
 	if !p.createdTables[tableName] {
 		tableMap := map[string]interface{}{}

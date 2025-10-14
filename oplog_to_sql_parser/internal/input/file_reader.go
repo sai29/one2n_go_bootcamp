@@ -18,7 +18,7 @@ func NewFileReader(filePath string) *FileReader {
 	return &FileReader{filePath: filePath}
 }
 
-func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p *parser.Parser,
+func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p parser.Parser,
 	sqlChan chan<- SqlStatement, errChan chan<- error) {
 
 	defer close(sqlChan)

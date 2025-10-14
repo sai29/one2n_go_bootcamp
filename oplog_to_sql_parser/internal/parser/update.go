@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func (p *Parser) updateSql(oplog Oplog) (string, error) {
+func updateSql(oplog Oplog) (string, error) {
 	output := ""
 	fieldsWithValues, whereColumnsPaired := []string{}, []string{}
 
