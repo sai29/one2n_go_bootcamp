@@ -5,9 +5,7 @@ import (
 )
 
 type Parser interface {
-	GetSqlStatements(oplog Oplog) ([]string, error)
-	ParseJsonStruct(oplog Oplog) ([]string, error)
-	saveCurrentTableColumns(record any, tableName string)
+	GenerateSql(oplog Oplog) ([]string, error)
 }
 
 type parser struct {
@@ -30,8 +28,8 @@ func NewParser() Parser {
 		linkedTableStatements: make(map[string][]string), IdGenerator: randString}
 }
 
-func (p *parser) GetSqlStatements(oplog Oplog) ([]string, error) {
-	sql, err := p.ParseJsonStruct(oplog)
+func (p *parser) GenerateSql(oplog Oplog) ([]string, error) {
+	sql, err := p.handleOplog(oplog)
 	if err != nil {
 		return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)
 	} else {
@@ -39,7 +37,7 @@ func (p *parser) GetSqlStatements(oplog Oplog) ([]string, error) {
 	}
 }
 
-func (p *parser) ParseJsonStruct(oplog Oplog) ([]string, error) {
+func (p *parser) handleOplog(oplog Oplog) ([]string, error) {
 	output := []string{}
 	switch oplog.Op {
 	case "i":
@@ -71,8 +69,8 @@ func (p *parser) ParseJsonStruct(oplog Oplog) ([]string, error) {
 		} else {
 			output = append(output, updateSql)
 			return output, nil
-
 		}
+
 	case "d":
 		deleteSql, err := deleteSql(oplog)
 		if err != nil {
