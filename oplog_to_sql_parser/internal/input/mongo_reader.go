@@ -143,7 +143,7 @@ func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p parser.Parser, c
 			switch entry.Op {
 			case "i", "u", "d":
 
-				sql, err := p.ParseJsonStruct(entry)
+				sql, err := p.GenerateSql(entry)
 				if err != nil {
 					fmt.Println("error parsing oplog to SQL:", err)
 					continue

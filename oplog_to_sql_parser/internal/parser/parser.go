@@ -29,7 +29,7 @@ func NewParser() Parser {
 }
 
 func (p *parser) GenerateSql(oplog Oplog) ([]string, error) {
-	sql, err := p.handleOplog(oplog)
+	sql, err := p.HandleOplog(oplog)
 	if err != nil {
 		return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)
 	} else {
@@ -37,11 +37,10 @@ func (p *parser) GenerateSql(oplog Oplog) ([]string, error) {
 	}
 }
 
-func (p *parser) handleOplog(oplog Oplog) ([]string, error) {
+func (p *parser) HandleOplog(oplog Oplog) ([]string, error) {
 	output := []string{}
 	switch oplog.Op {
 	case "i":
-
 		p.saveCurrentTableColumns(oplog.Record, oplog.Namespace)
 
 		statements := p.createSchemaAndTable(oplog)

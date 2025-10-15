@@ -19,7 +19,7 @@ func TestParser_GetSqlStatements(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := parser.NewParser()
-			got, gotErr := p.GetSqlStatements(tt.oplog)
+			got, gotErr := p.GenerateSql(tt.oplog)
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("GetSqlStatements() failed: %v", gotErr)

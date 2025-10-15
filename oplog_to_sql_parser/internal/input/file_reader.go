@@ -48,7 +48,7 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p p
 			continue
 		} else {
 			// fmt.Printf("%+v\n", entry)
-			sql, err := p.GetSqlStatements(entry)
+			sql, err := p.GenerateSql(entry)
 			// fmt.Println("Sql is ->", sql)
 			if err != nil {
 				errChan <- fmt.Errorf("error from GetSqlStatements -> %v", err)
