@@ -43,22 +43,26 @@ func (p *parser) HandleOplog(oplog Oplog) ([]string, error) {
 	case "i":
 		p.saveCurrentTableColumns(oplog.Record, oplog.Namespace)
 
-		statements := p.createSchemaAndTable(oplog)
-		output = append(output, statements["main_table"]...)
+		statements, err := p.createSchemaAndTable(oplog)
+		if err != nil {
+			return nil, err
+		} else {
+			output = append(output, statements["main_table"]...)
+		}
 
 		alterStmts, insertColumns := p.checkForNewColumns(oplog)
 		output = append(output, alterStmts...)
 
 		insertSql, err := insertSql(oplog, insertColumns)
 
-		if err == nil {
+		if err != nil {
+			fmt.Println("Error in insert sql is ->", err)
+			return []string{}, err
+		} else {
+
 			output = append(output, insertSql...)
 			output = append(output, statements["linked_table"]...)
 			return output, nil
-
-		} else {
-			fmt.Println("Error in insert sql is ->", err)
-			return []string{}, err
 		}
 
 	case "u":
