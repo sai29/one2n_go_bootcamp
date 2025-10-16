@@ -136,18 +136,7 @@ func (p *parser) createTable(oplog Oplog) string {
 	if p.tableNotPresent(oplog.Namespace) {
 		for _, key := range p.tableSchemas[oplog.Namespace] {
 			oplogRecordValue = oplog.Record[key]
-			switch oplogRecordValue.(type) {
-			case string:
-				if key == "_id" {
-					columns = append(columns, "_id VARCHAR(255) PRIMARY KEY")
-				} else {
-					columns = append(columns, fmt.Sprintf("%s VARCHAR(255)", key))
-				}
-			case bool:
-				columns = append(columns, fmt.Sprintf("%s BOOLEAN", key))
-			case float64, int:
-				columns = append(columns, fmt.Sprintf("%v FLOAT", key))
-			}
+			columns = append(columns, inferSQLType(key, oplogRecordValue))
 		}
 
 		createdTable += fmt.Sprintf("CREATE TABLE %s (%s);", oplog.Namespace, strings.Join(columns, ", "))
@@ -200,6 +189,7 @@ func (p *parser) createLinkedTable(nameSpace string, tableName string, data inte
 		if ok {
 			for _, key := range p.tableSchemas[fullTableNameWithSchema] {
 				mvalue := m[key]
+				columns = append(columns, inferSQLType(key, mvalue))
 				switch mvalue.(type) {
 				case string:
 					if key == "_id" {
@@ -231,11 +221,3 @@ func (p *parser) tableNotPresent(tableName string) bool {
 func (p *parser) markTableCreated(tableName string) {
 	p.createdTables[tableName] = true
 }
-
-// Need to decouple schema and table creation for top level collection from nested table creation and insert statements creation
-// Need to check if table is already present before creating schema and table but that shouldn't prevent from nested table insert statement creation
-// Similarly need to check if linked table is already present before creating linked table" - this is already being done
-// Even if linked table and schema are present we still need to generate insert statements for nested table data
-// We need a way to append the nested inserts into the output being sent to the writer
-
-// WHY IS CREATE SCHEMA AND CREATE TABLE AT TOP LEVEL SEPARATED BY CODE FOR NESTED TABLE CREATE AND INSERT?? BAD CODE - ALL IN SAME FUNCTION AS WELL

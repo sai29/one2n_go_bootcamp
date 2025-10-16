@@ -9,6 +9,22 @@ import (
 
 const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
+func inferSQLType(key any, value any) string {
+	switch value.(type) {
+	case string:
+		if key == "_id" {
+			return "_id VARCHAR(255) PRIMARY KEY"
+		}
+		return fmt.Sprintf("%s VARCHAR(255)", key)
+	case bool:
+		return fmt.Sprintf("%s BOOLEAN", key)
+	case float64, int:
+		return fmt.Sprintf("%s FLOAT", key)
+	default:
+		return ""
+	}
+}
+
 func appendedColumnsAndValues(appendSlice []string, columnsMap map[string]interface{}) []string {
 	for key, value := range columnsMap {
 		key = strings.ToLower(key)
