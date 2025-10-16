@@ -190,18 +190,6 @@ func (p *parser) createLinkedTable(nameSpace string, tableName string, data inte
 			for _, key := range p.tableSchemas[fullTableNameWithSchema] {
 				mvalue := m[key]
 				columns = append(columns, inferSQLType(key, mvalue))
-				switch mvalue.(type) {
-				case string:
-					if key == "_id" {
-						continue
-					} else {
-						columns = append(columns, fmt.Sprintf("%s VARCHAR(255)", key))
-					}
-				case bool:
-					columns = append(columns, fmt.Sprintf("%s BOOLEAN", key))
-				case float64, int:
-					columns = append(columns, fmt.Sprintf("%v FLOAT", key))
-				}
 			}
 		} else {
 			return "", nil
