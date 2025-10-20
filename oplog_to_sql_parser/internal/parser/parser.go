@@ -21,6 +21,15 @@ type Oplog struct {
 	Record        map[string]interface{} `json:"o"`
 	UpdateColumns map[string]interface{} `json:"o2"`
 	TableCreated  bool
+	TimeStamp     map[string]interface{} `json:"ts"`
+}
+
+type Bookmark struct {
+	LastTS struct {
+		T int `json:"T"`
+		I int `json:"I"`
+	} `json:"last_ts"`
+	LastNamespace string `json:"last_namespace"`
 }
 
 func NewParser() Parser {

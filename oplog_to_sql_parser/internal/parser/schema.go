@@ -133,8 +133,6 @@ func (p *parser) generateNestedTableStatements(nestedColumns []string, oplog Opl
 				} else if nestedStmt != "" {
 					nestedStmts = append(nestedStmts, nestedStmt)
 				}
-
-				// nestedStmts = append(nestedStmts, p.generateLinkedInsertSql(oplog, nestedColumn, nestedValue))
 			}
 		}
 
@@ -155,7 +153,7 @@ func (p *parser) createTable(oplog Oplog) string {
 			}
 		}
 
-		createdTable += fmt.Sprintf("CREATE TABLE %s (%s);", oplog.Namespace, strings.Join(columns, ", "))
+		createdTable += fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", oplog.Namespace, strings.Join(columns, ", "))
 	}
 	return createdTable
 }
@@ -212,7 +210,7 @@ func (p *parser) createLinkedTable(nameSpace string, tableName string, data inte
 		} else {
 			return "", nil
 		}
-		createLinkedTableStmts := fmt.Sprintf("CREATE TABLE %s (%s);", fullTableNameWithSchema, strings.Join(columns, ", "))
+		createLinkedTableStmts := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", fullTableNameWithSchema, strings.Join(columns, ", "))
 
 		return createLinkedTableStmts, nil
 	}

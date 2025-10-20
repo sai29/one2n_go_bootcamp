@@ -25,6 +25,14 @@ func inferSQLType(key any, value any) string {
 	}
 }
 
+func OpenOrCreateFile(fileName string) (*os.File, error) {
+	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		fmt.Printf("Error opening/creating file -> %s\n err: %s", fileName, err)
+	}
+	return file, nil
+}
+
 func appendedColumnsAndValues(appendSlice []string, columnsMap map[string]interface{}) []string {
 	for key, value := range columnsMap {
 		key = strings.ToLower(key)
@@ -56,7 +64,6 @@ func nestedDocument(value any) bool {
 }
 
 func randString(n int) string {
-
 	b := make([]byte, n)
 	for i := range b {
 		b[i] = letters[rand.Intn(len(letters))]
