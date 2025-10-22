@@ -71,11 +71,15 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p p
 				}
 			}
 
-			lastBookmark := bk.LastTS.T
+			bookmarkTimestamp := bk.LastTS.T
+			bookmarkIncrement := bk.LastTS.I
 
 			currentTimestamp := int(entry.TimeStamp["T"].(float64))
+			currentIncrement := int(entry.TimeStamp["I"].(float64))
 
-			if lastBookmark == 0 || currentTimestamp > lastBookmark {
+			if bk.LastTS.T == 0 ||
+				(currentTimestamp > bookmarkTimestamp) ||
+				(currentTimestamp == bk.LastTS.T && currentIncrement > bookmarkIncrement) {
 				sql, err := p.GenerateSql(entry)
 				// fmt.Println("Sql is ->", sql)
 				if err != nil {
@@ -86,7 +90,7 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p p
 					}
 					sqlChan <- SqlStatement{IsBoundary: true}
 
-					if err := bookmark.SaveBookmark("bookmark.json", currentTimestamp); err != nil {
+					if err := bookmark.SaveBookmark("bookmark.json", currentTimestamp, currentIncrement); err != nil {
 						fmt.Println("error saving bookmark timestamp", err)
 						errChan <- fmt.Errorf("error saving bookmark timestamp -> %s", err)
 					} else {

@@ -16,10 +16,10 @@ type Bookmark struct {
 	LastNamespace string `json:"last_namespace"`
 }
 
-func SaveBookmark(path string, t int) error {
+func SaveBookmark(path string, t int, i int) error {
 	var bookmark parser.Bookmark
 
-	bookmark.LastTS.I = 0
+	bookmark.LastTS.I = i
 	bookmark.LastTS.T = t
 
 	data, err := json.MarshalIndent(bookmark, "", " ")

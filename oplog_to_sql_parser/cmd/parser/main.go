@@ -64,7 +64,7 @@ func handleInterrupt(cancel context.CancelFunc) {
 
 	go func() {
 		<-interrupt
-		fmt.Println("Shutting down program...")
+		fmt.Println("Processing interrupt...")
 		cancel()
 	}()
 }
