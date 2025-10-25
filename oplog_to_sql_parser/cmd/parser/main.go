@@ -116,3 +116,13 @@ func createWriter(config *config.Config) output.Writer {
 	}
 	return output.NewPostgresWriter(config.Output.OutputUri)
 }
+
+// Reader go routine - already present
+// Reader go routine will parse the json into oplog struct and look for db and collection names and pass that on to dispatcher via a channel called oplogDispatchChan
+// We will start another dispatcher go routine in main.go that will be blocking and reading from oplogDispatchChan
+// The dispatcher go routine will check if it already has a channel(dbNameChan) and a go routine(db_worker)that listens on dbNameChan for that database - if not present it will create one and send the db.collection string via the channel(dbNameChan) to the worker(db_worker)
+// Now db_worker is listening on dbNameChan channel for the "db.collection" string and it maintains a map of dbName -> [collectionChans] where collectionChans is the list of channels created for each collection
+// Now db_worker checks if there is already a go routine and a channel for the collection string it received if not present it creates both(collectionNameChan) and a go routine(collection_worker) and sends the oplog to the collection_worker
+// The collection_worker if already present or just created is listening on collectionNameChan for the oplog to be received and does the work of converting the oplog into sql
+
+//

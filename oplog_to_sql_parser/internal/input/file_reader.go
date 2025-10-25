@@ -51,18 +51,7 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p p
 			continue
 		} else {
 			// fmt.Printf("%+v\n", entry)
-			tsFile, err := os.OpenFile("bookmark.json", os.O_RDONLY, 0644)
-			if err != nil {
-				errChan <- fmt.Errorf("error opening/creating file -> %s\n err: %s", "bookmark.json", err)
-			}
-
-			defer tsFile.Close()
-
-			tsDec := json.NewDecoder(tsFile)
-			var bk parser.Bookmark
-
-			err = tsDec.Decode(&bk)
-
+			bk, err := bookmark.Load("bookmark.json")
 			if err != nil {
 				if err != io.EOF {
 					errChan <- fmt.Errorf("couldn't decode timestamp json into bookmark struct: %s", err)
@@ -85,6 +74,7 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p p
 				if err != nil {
 					errChan <- fmt.Errorf("error from GetSqlStatements -> %v", err)
 				} else {
+
 					for _, stmt := range sql {
 						sqlChan <- SqlStatement{Sql: stmt, IsBoundary: false}
 					}

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -31,11 +30,12 @@ func NewMongoReader(uri string) *MongoReader {
 
 func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p parser.Parser,
 	sqlChan chan<- SqlStatement, errChan chan<- error) {
-	// connString := "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
 
+	// connString := "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
 	defer close(sqlChan)
 	defer close(errChan)
-	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"))
+
+	client, err := mongo.Connect(options.Client().ApplyURI(mr.uri))
 	if err != nil {
 		errChan <- fmt.Errorf("error connections to mongo client -> %v", err)
 	}
@@ -51,25 +51,7 @@ func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p parser
 		errChan <- fmt.Errorf("ping err -> %v", err)
 	}
 
-	// dbs, err := client.ListDatabaseNames(ctx, bson.M{})
-	// if err != nil {
-	// 	errChan <- fmt.Errorf("list databases failed: %v", err)
-	// }
-	// fmt.Println("Databases:", dbs)
-
-	tsFile, err := os.OpenFile("bookmark.json", os.O_RDONLY, 0644)
-	if err != nil {
-		errChan <- fmt.Errorf("error opening/creating file -> %s\n err: %s", "bookmark.json", err)
-	}
-
-	defer tsFile.Close()
-
-	tsDec := json.NewDecoder(tsFile)
-	var bk parser.Bookmark
-
-	err = tsDec.Decode(&bk)
-	fmt.Printf("Bookmark is %+v\n", bk)
-
+	bk, err := bookmark.Load("bookmark.json")
 	if err != nil {
 		if err != io.EOF {
 			errChan <- fmt.Errorf("couldn't decode timestamp json into bookmark struct: %s", err)

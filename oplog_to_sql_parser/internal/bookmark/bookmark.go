@@ -16,6 +16,27 @@ type Bookmark struct {
 	LastNamespace string `json:"last_namespace"`
 }
 
+func Load(path string) (parser.Bookmark, error) {
+	tsFile, err := os.OpenFile("bookmark.json", os.O_RDONLY, 0644)
+	if err != nil {
+		return parser.Bookmark{}, err
+	}
+
+	defer tsFile.Close()
+
+	tsDec := json.NewDecoder(tsFile)
+	var bk parser.Bookmark
+
+	err = tsDec.Decode(&bk)
+	if err != nil {
+		return parser.Bookmark{}, nil
+	}
+	fmt.Printf("Bookmark is %+v\n", bk)
+
+	return bk, nil
+
+}
+
 func SaveBookmark(path string, t int, i int) error {
 	var bookmark parser.Bookmark
 
