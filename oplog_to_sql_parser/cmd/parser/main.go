@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/config"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/dispatcher"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/input"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/output"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
@@ -49,7 +50,7 @@ var rootCmd = &cobra.Command{
 		flagCfg.Input.InputMethod = "file"
 		// sql, err := parser.decodeJSONString(oplogInsertJson)
 
-		if err := fetchSqlFromInputSource(streamCtx); err != nil {
+		if err := oplogToSql(streamCtx); err != nil {
 			fmt.Printf("Error from fetchSqlFromInputSource: %s", err)
 			return err
 		}
@@ -58,38 +59,29 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-func handleInterrupt(cancel context.CancelFunc) {
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+func oplogToSql(streamCtx context.Context) error {
 
-	go func() {
-		<-interrupt
-		fmt.Println("Processing interrupt...")
-		cancel()
-	}()
-}
-
-func fetchSqlFromInputSource(streamCtx context.Context) error {
-
-	parser := parser.NewParser()
-	sqlChan := make(chan input.SqlStatement)
+	oplogChan := make(chan parser.Oplog, 100)
 	errChan := make(chan error)
-	reader := createReader(flagCfg.Input.InputFile, flagCfg.Input.InputUri)
 
-	// fmt.Println("Start fetchSqlFromInputSource")
-	writer := createWriter(flagCfg)
+	p := parser.NewParser()
+	reader := createReader(flagCfg.Input.InputFile, flagCfg.Input.InputUri)
+	dispatcher := dispatcher.NewDispatcher()
+
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		go reader.Read(streamCtx, flagCfg, parser, sqlChan, errChan)
+		fmt.Println("entering read")
+		reader.Read(streamCtx, flagCfg, p, oplogChan, errChan, &wg)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		writer.Write(streamCtx, sqlChan, errChan)
+		fmt.Println("entering dispatch")
+		dispatcher.Dispatch(streamCtx, oplogChan, &wg)
 	}()
 
 	go func() {
@@ -116,6 +108,51 @@ func createWriter(config *config.Config) output.Writer {
 	}
 	return output.NewPostgresWriter(config.Output.OutputUri)
 }
+
+func handleInterrupt(cancel context.CancelFunc) {
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-interrupt
+		fmt.Println("Processing interrupt...")
+		cancel()
+	}()
+}
+
+// func fetchSqlFromInputSource(streamCtx context.Context) error {
+
+// 	parser := parser.NewParser()
+// 	sqlChan := make(chan input.SqlStatement)
+// 	errChan := make(chan error)
+// 	reader := createReader(flagCfg.Input.InputFile, flagCfg.Input.InputUri)
+
+// 	// fmt.Println("Start fetchSqlFromInputSource")
+// 	writer := createWriter(flagCfg)
+// 	var wg sync.WaitGroup
+
+// 	wg.Add(1)
+// 	go func() {
+// 		defer wg.Done()
+// 		go reader.Read(streamCtx, flagCfg, parser, sqlChan, errChan)
+// 	}()
+
+// 	wg.Add(1)
+// 	go func() {
+// 		defer wg.Done()
+// 		writer.Write(streamCtx, sqlChan, errChan)
+// 	}()
+
+// 	go func() {
+// 		for error := range errChan {
+// 			fmt.Printf("error from error channel -> %s\n", error)
+// 		}
+// 	}()
+
+// 	wg.Wait()
+
+// 	return nil
+// }
 
 // Reader go routine - already present
 // Reader go routine will parse the json into oplog struct and look for db and collection names and pass that on to dispatcher via a channel called oplogDispatchChan

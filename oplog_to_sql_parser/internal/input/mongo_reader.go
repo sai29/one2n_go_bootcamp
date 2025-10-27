@@ -7,6 +7,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/bookmark"
@@ -28,11 +29,10 @@ func NewMongoReader(uri string) *MongoReader {
 	return &MongoReader{uri: uri}
 }
 
-func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p parser.Parser,
-	sqlChan chan<- SqlStatement, errChan chan<- error) {
+func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p parser.Parser, oplogChan chan<- parser.Oplog, errChan chan<- error, wg *sync.WaitGroup) {
 
 	// connString := "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
-	defer close(sqlChan)
+	defer close(oplogChan)
 	defer close(errChan)
 
 	client, err := mongo.Connect(options.Client().ApplyURI(mr.uri))
@@ -79,7 +79,7 @@ func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p parser
 
 	defer cursor.Close(ctx)
 
-	err = ProcessOplogs(ctx, cursor, p, config, sqlChan, bk)
+	// err = ProcessOplogs(ctx, cursor, p, config, sqlChan, bk)
 	if err != nil {
 		errChan <- fmt.Errorf("oplog processing failed: %w", err)
 	}
