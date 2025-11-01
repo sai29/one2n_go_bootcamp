@@ -37,21 +37,26 @@ func (fr *FileWriter) Write(ctx context.Context, sqlChan <-chan input.SqlStateme
 		}
 	}()
 
-	for stmt := range sqlChan {
+	for {
 		select {
 		case <-ctx.Done():
+			fmt.Println("Cancel called from file writer")
 			return
-		default:
-		}
-		// Need to find a better way to handle nil values than this line below.
-		if stmt.Sql != "" {
-			_, err = file.WriteString(stmt.Sql + "\n")
-			if err != nil {
+		case stmt, ok := <-sqlChan:
+
+			if !ok {
+				return
+			}
+
+			if stmt.Sql == "" {
+				continue
+			}
+
+			if _, err = file.WriteString(stmt.Sql + "\n"); err != nil {
 				fmt.Printf("error writing to output file -> %v\n", err)
 				errChan <- fmt.Errorf("error writing to file -> %w", err)
 			}
 
 		}
-
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/bookmark"
@@ -28,12 +29,12 @@ func NewMongoReader(uri string) *MongoReader {
 	return &MongoReader{uri: uri}
 }
 
-func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p parser.Parser,
-	sqlChan chan<- SqlStatement, errChan chan<- error) {
+func (mr *MongoReader) Read(ctx context.Context, config *config.Config,
+	p parser.Parser, oplogChan chan<- parser.Oplog,
+	errChan chan<- error, wg *sync.WaitGroup) {
 
 	// connString := "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
-	defer close(sqlChan)
-	defer close(errChan)
+	defer close(oplogChan)
 
 	client, err := mongo.Connect(options.Client().ApplyURI(mr.uri))
 	if err != nil {
@@ -79,7 +80,7 @@ func (mr *MongoReader) Read(ctx context.Context, config *config.Config, p parser
 
 	defer cursor.Close(ctx)
 
-	err = ProcessOplogs(ctx, cursor, p, config, sqlChan, bk)
+	err = ProcessOplogs(ctx, cursor, p, config, oplogChan, bk)
 	if err != nil {
 		errChan <- fmt.Errorf("oplog processing failed: %w", err)
 	}
@@ -131,7 +132,7 @@ func OpenTailableCursor(ctx context.Context, client *mongo.Client, startTs bson.
 }
 
 func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p parser.Parser, config *config.Config,
-	sqlChan chan<- SqlStatement, savedBookmark parser.Bookmark) error {
+	oplogChan chan<- parser.Oplog, savedBookmark parser.Bookmark) error {
 
 	fmt.Println("Entering here")
 	for {
@@ -161,50 +162,21 @@ func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p parser.Parser, c
 			err = json.Unmarshal(jsonData, &entry)
 			if err != nil {
 				fmt.Println("failed to unmarshal json", err)
-			}
-
-			// fmt.Println("saved bookmark is ->", savedBookmark)
-
-			currentTimestamp := int(entry.TimeStamp["T"].(float64))
-			currentIncrement := int(entry.TimeStamp["I"].(float64))
-
-			// fmt.Println("Current time stamp is -> ", currentTimestamp)
-
-			if savedBookmark.LastTS.T == 0 ||
-				(currentTimestamp > savedBookmark.LastTS.T) ||
-				(currentTimestamp == savedBookmark.LastTS.T && currentIncrement > savedBookmark.LastTS.I) {
-
+			} else {
 				switch entry.Op {
 				case "i", "u", "d":
 
 					namespaceCollection := strings.Split(entry.Namespace, ".")[0]
+
 					if !slices.Contains(systemNamespace, namespaceCollection) {
 
-						// fmt.Printf("entry is %+v", entry)
-
-						sql, err := p.GenerateSql(entry)
-						if err != nil {
-							fmt.Println("error parsing oplog to SQL:", err)
-							continue
-						}
-
-						for _, stmt := range sql {
-							sqlChan <- SqlStatement{Sql: stmt, IsBoundary: false}
-						}
-
-						sqlChan <- SqlStatement{IsBoundary: true}
-
-						if err := bookmark.SaveBookmark("bookmark.json", currentTimestamp, currentIncrement); err != nil {
-							fmt.Println("error saving bookmark timestamp", err)
-							return fmt.Errorf("error saving bookmark timestamp -> %s", err)
-						} else {
-							fmt.Println("saved bookmark successfully ->", currentTimestamp)
-						}
-
+						fmt.Printf("entry is %+v", entry)
+						oplogChan <- entry
 					}
 				default:
 					continue
 				}
+
 			}
 		}
 
