@@ -1,11 +1,14 @@
 package parser
 
 import (
+	"context"
 	"fmt"
 )
 
 type Parser interface {
 	GenerateSql(oplog Oplog) ([]string, error)
+	ParserWorker(ctx context.Context)
+	GetParserReqChan() chan ParserRequest
 }
 
 type parser struct {
@@ -13,6 +16,7 @@ type parser struct {
 	tableSchemas          map[string][]string
 	linkedTableStatements map[string][]string
 	IdGenerator           func(int) string
+	parserReqChan         chan ParserRequest
 }
 
 type Oplog struct {
@@ -32,9 +36,40 @@ type Bookmark struct {
 	LastNamespace string `json:"last_namespace"`
 }
 
+type ParserRequest struct {
+	Oplog    Oplog
+	RespChan chan ParserResp
+}
+
+type ParserResp struct {
+	Sql []string
+	Err error
+}
+
 func NewParser() Parser {
 	return &parser{createdTables: make(map[string]bool), tableSchemas: make(map[string][]string),
-		linkedTableStatements: make(map[string][]string), IdGenerator: randString}
+		linkedTableStatements: make(map[string][]string), IdGenerator: randString, parserReqChan: make(chan ParserRequest, 100)}
+}
+
+func (p *parser) GetParserReqChan() chan ParserRequest {
+	return p.parserReqChan
+}
+
+func (p *parser) ParserWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case req, ok := <-p.GetParserReqChan():
+			if !ok {
+				return
+			}
+			sql, err := p.GenerateSql(req.Oplog)
+			req.RespChan <- ParserResp{Sql: sql, Err: err}
+			fmt.Println("Closing req.RespChan")
+			close(req.RespChan)
+		}
+	}
 }
 
 func (p *parser) GenerateSql(oplog Oplog) ([]string, error) {
@@ -44,6 +79,7 @@ func (p *parser) GenerateSql(oplog Oplog) ([]string, error) {
 	} else {
 		return sql, nil
 	}
+
 }
 
 func (p *parser) HandleOplog(oplog Oplog) ([]string, error) {

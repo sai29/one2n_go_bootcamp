@@ -1,6 +1,7 @@
 package bookmark
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -31,9 +32,33 @@ func Load(path string) (parser.Bookmark, error) {
 	if err != nil {
 		return parser.Bookmark{}, nil
 	}
-	fmt.Printf("Bookmark is %+v\n", bk)
+	// fmt.Printf("Bookmark is %+v\n", bk)
 
 	return bk, nil
+
+}
+
+func BookmarkWorker(ctx context.Context, bookmarkChan chan map[string]int, errChan chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case bk, ok := <-bookmarkChan:
+			if !ok {
+				fmt.Println("bookmkark worker returning after bookmarkChan closed.")
+				return
+			}
+
+			// fmt.Println("Bookmark is", bk)
+			if err := SaveBookmark("bookmark.json", bk["currentT"], bk["currentI"]); err != nil {
+				fmt.Println("error saving bookmark timestamp", err)
+				errChan <- fmt.Errorf("error saving bookmark timestamp -> %s", err)
+			} else {
+				fmt.Println("saved bookmark successfully ->", bk)
+			}
+
+		}
+	}
 
 }
 
@@ -56,4 +81,12 @@ func SaveBookmark(path string, t int, i int) error {
 		return fmt.Errorf("faile to rename temp file: %s", err)
 	}
 	return nil
+}
+
+func OplogAfterBookmark(bkTimeStamp, bkIncrement,
+	currentTimestamp, currentIncrement int) bool {
+	return bkTimeStamp == 0 ||
+		(currentTimestamp > bkTimeStamp) ||
+		(currentTimestamp == bkTimeStamp &&
+			currentIncrement > bkIncrement)
 }
