@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/logx"
 )
 
 const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -28,7 +30,8 @@ func inferSQLType(key any, value any) string {
 func OpenOrCreateFile(fileName string) (*os.File, error) {
 	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
-		fmt.Printf("Error opening/creating file -> %s\n err: %s", fileName, err)
+		logx.Warn("Error opening/creating file -> %s\n err: %s", fileName, err)
+		return nil, err
 	}
 	return file, nil
 }

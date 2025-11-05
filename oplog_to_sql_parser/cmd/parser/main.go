@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -11,7 +10,9 @@ import (
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/bookmark"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/config"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/dispatcher"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/errors"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/input"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/logx"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/output"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
 
@@ -43,16 +44,16 @@ var rootCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		programCtx := context.Background()
-		streamCtx, streamCancel := context.WithCancel(programCtx)
+		ctx, ctxCancel := context.WithCancel(programCtx)
 
-		handleInterrupt(streamCancel)
+		handleInterrupt(ctxCancel)
 
-		flagCfg.Output.OutputMethod = "file"
-		flagCfg.Input.InputMethod = "db"
-		// sql, err := parser.decodeJSONString(oplogInsertJson)
+		if err := config.ValidateConfig(flagCfg); err != nil {
+			logx.Warn("error validating input flags -> %v", err)
+		}
 
-		if err := oplogToSql(streamCtx); err != nil {
-			fmt.Printf("Error from fetchSqlFromInputSource: %s", err)
+		if err := oplogToSql(ctx); err != nil {
+			logx.Error("error from oplogToSql() -> %v", err)
 			return err
 		}
 
@@ -60,44 +61,59 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-func oplogToSql(streamCtx context.Context) error {
+func oplogToSql(ctx context.Context) error {
 
 	oplogChan := make(chan parser.Oplog, 100)
 	bookmarkChan := make(chan map[string]int, 100)
 	sqlChan := make(chan input.SqlStatement, 100)
-	errChan := make(chan error)
+	errChan := make(chan errors.AppError, 10)
 
 	p := parser.NewParser()
-	reader := createReader(flagCfg.Input.InputFile, flagCfg.Input.InputUri)
 	dispatcher := dispatcher.NewDispatcher(p)
-	writer := createWriter(flagCfg)
+
+	reader := createReader(flagCfg)
+	writer := createWriter(flagCfg, errChan)
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go func() {
+		for err := range errChan {
+			if err.Fatal {
+				cancel()
+				logx.Fatal("err chan -> %v", err.Err)
+			}
+			logx.Warn("error -> %v", err.Err)
+		}
+	}()
 
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		fmt.Println("starting bookmark worker")
-		bookmark.BookmarkWorker(streamCtx, bookmarkChan, errChan)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		p.ParserWorker(streamCtx)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		fmt.Println("entering Read")
+		logx.Info("Entering Read worker")
 		reader.Read(streamCtx, flagCfg, p, oplogChan, errChan, &wg)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		fmt.Println("entering dispatch")
+		logx.Info("Entering Bookmark worker")
+		bookmark.BookmarkWorker(streamCtx, bookmarkChan, errChan)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		logx.Info("Entering Parser worker")
+		p.ParserWorker(streamCtx)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		logx.Info("Entering Dispatch worker")
 		dispatcher.Dispatch(streamCtx, oplogChan, bookmarkChan, sqlChan, errChan, &wg)
 	}()
 
@@ -107,15 +123,9 @@ func oplogToSql(streamCtx context.Context) error {
 		writer.Write(streamCtx, sqlChan, errChan)
 	}()
 
-	go func() {
-		for error := range errChan {
-			fmt.Printf("error from error channel -> %s\n", error)
-		}
-	}()
-
 	wg.Wait()
 
-	fmt.Println("Closing all main.go channels")
+	logx.Info("Closing all main.go channels")
 
 	close(bookmarkChan)
 	close(errChan)
@@ -123,18 +133,18 @@ func oplogToSql(streamCtx context.Context) error {
 	return nil
 }
 
-func createReader(file, uri string) input.Reader {
-	if file != "" {
-		return input.NewFileReader(file)
+func createReader(flags *config.Config) input.Reader {
+	if flags.Input.InputMethod == "file" {
+		return input.NewFileReader(flags.Input.InputFile)
 	}
-	return input.NewMongoReader(uri)
+	return input.NewMongoReader(flags.Input.InputUri)
 }
 
-func createWriter(config *config.Config) output.Writer {
-	if config.Output.OutputMethod == "file" && config.Output.OutputFile != "" {
+func createWriter(config *config.Config, errChan chan errors.AppError) output.Writer {
+	if config.Output.OutputMethod == "file" {
 		return output.NewFileWriter(config.Output.OutputFile)
 	}
-	return output.NewPostgresWriter(config.Output.OutputUri)
+	return output.NewPostgresWriter(config.Output.OutputUri, errChan)
 }
 
 func handleInterrupt(cancel context.CancelFunc) {
@@ -143,41 +153,7 @@ func handleInterrupt(cancel context.CancelFunc) {
 
 	go func() {
 		<-interrupt
-		fmt.Println("Processing interrupt...")
+		logx.Info("Processing interrupt...")
 		cancel()
 	}()
 }
-
-// func fetchSqlFromInputSource(streamCtx context.Context) error {
-
-// 	parser := parser.NewParser()
-// 	sqlChan := make(chan input.SqlStatement)
-// 	errChan := make(chan error)
-// 	reader := createReader(flagCfg.Input.InputFile, flagCfg.Input.InputUri)
-
-// 	// fmt.Println("Start fetchSqlFromInputSource")
-// 	writer := createWriter(flagCfg)
-// 	var wg sync.WaitGroup
-
-// 	wg.Add(1)
-// 	go func() {
-// 		defer wg.Done()
-// 		go reader.Read(streamCtx, flagCfg, parser, sqlChan, errChan)
-// 	}()
-
-// 	wg.Add(1)
-// 	go func() {
-// 		defer wg.Done()
-// 		writer.Write(streamCtx, sqlChan, errChan)
-// 	}()
-
-// 	go func() {
-// 		for error := range errChan {
-// 			fmt.Printf("error from error channel -> %s\n", error)
-// 		}
-// 	}()
-
-// 	wg.Wait()
-
-// 	return nil
-// }

@@ -8,7 +8,9 @@ import (
 	"sync"
 
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/bookmark"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/errors"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/input"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/logx"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
 )
 
@@ -32,7 +34,7 @@ func NewDispatcher(p parser.Parser) *Dispatcher {
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, oplog <-chan parser.Oplog,
-	bookmarkChan chan map[string]int, sqlChan chan input.SqlStatement, errChan chan<- error, wg *sync.WaitGroup) {
+	bookmarkChan chan map[string]int, sqlChan chan input.SqlStatement, errChan chan<- errors.AppError, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for {
@@ -41,7 +43,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, oplog <-chan parser.Oplog,
 			return
 		case op, ok := <-oplog:
 			if !ok {
-				fmt.Println("Oplog chan closed, closing all dbChans..")
+				logx.Info("Oplog chan closed, closing all dbChans...")
 				for _, worker := range d.dbWorkers {
 					close(worker.dbChan)
 				}
@@ -72,7 +74,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, oplog <-chan parser.Oplog,
 				wg.Add(1)
 				d.dbWorkerWg.Add(1)
 				go func() {
-					fmt.Println("Calling db worker")
+					logx.Info("Calling DB worker")
 					defer d.dbWorkerWg.Done()
 					worker.processDB(ctx, errChan, sqlChan, wg)
 				}()
@@ -88,9 +90,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, oplog <-chan parser.Oplog,
 	}
 }
 
-func (dbW *dbWorker) processDB(ctx context.Context, errChan chan<- error,
+func (dbW *dbWorker) processDB(ctx context.Context, errChan chan<- errors.AppError,
 	sqlChan chan input.SqlStatement, wg *sync.WaitGroup) {
-	fmt.Println("inside db worker")
+	logx.Info("Entering DB worker")
 	defer wg.Done()
 
 	for {
@@ -99,7 +101,7 @@ func (dbW *dbWorker) processDB(ctx context.Context, errChan chan<- error,
 			return
 		case oplog, ok := <-dbW.dbChan:
 			if !ok {
-				fmt.Println("db chan closed, closing all connection chans..")
+				logx.Info("db chan closed, closing all connection chans...")
 				for _, ch := range dbW.collectionChans {
 					close(ch)
 				}
@@ -116,7 +118,7 @@ func (dbW *dbWorker) processDB(ctx context.Context, errChan chan<- error,
 
 				dbW.collectionWg.Add(1)
 				wg.Add(1)
-				fmt.Println("Calling collections worker")
+				logx.Info("Calling Collections worker")
 				go dbW.collectionWorker(ctx, collectionChan, sqlChan, errChan, wg)
 			}
 			dbW.collectionChans[collection] <- oplog
@@ -126,14 +128,14 @@ func (dbW *dbWorker) processDB(ctx context.Context, errChan chan<- error,
 }
 
 func (dbW *dbWorker) collectionWorker(ctx context.Context, oplog chan parser.Oplog,
-	sqlChan chan input.SqlStatement, errChan chan<- error, wg *sync.WaitGroup) {
+	sqlChan chan input.SqlStatement, errChan chan<- errors.AppError, wg *sync.WaitGroup) {
 
 	defer wg.Done()
 	defer dbW.collectionWg.Done()
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Cancelling from collection worker")
+			logx.Info("Cancelling from collection worker")
 			return
 		case oplog, ok := <-oplog:
 			if !ok {
@@ -143,15 +145,15 @@ func (dbW *dbWorker) collectionWorker(ctx context.Context, oplog chan parser.Opl
 
 			collection := nameSpace[1]
 
-			fmt.Println("Inside collection worker of collection", collection)
-			// fmt.Printf("Processing oplog -> %+v\n", oplog.TimeStamp)
+			logx.Info("Inside collection worker of collection -> %v", collection)
+			logx.Info("Processing oplog -> %+v", oplog.TimeStamp)
 
 			bk, err := bookmark.Load("bookmark.json")
 			if err != nil {
 				if err != io.EOF {
-					errChan <- fmt.Errorf("couldn't decode timestamp json into bookmark struct: %s", err)
+					errors.SendWarn(errChan, fmt.Errorf("couldn't decode timestamp json into bookmark struct: %s", err))
 				} else {
-					fmt.Println("Empty file")
+					logx.Info("Empty file")
 				}
 			}
 
@@ -178,7 +180,7 @@ func (dbW *dbWorker) collectionWorker(ctx context.Context, oplog chan parser.Opl
 						return
 					}
 					if resp.Err != nil {
-						errChan <- fmt.Errorf("error from GetSqlStatements -> %v", err)
+						errors.SendWarn(errChan, fmt.Errorf("error from GetSqlStatements -> %v", err))
 					} else {
 						for _, stmt := range resp.Sql {
 							sqlChan <- input.SqlStatement{Sql: stmt, IsBoundary: false}
@@ -193,7 +195,7 @@ func (dbW *dbWorker) collectionWorker(ctx context.Context, oplog chan parser.Opl
 					}
 				}
 			} else {
-				fmt.Println("Skipping oplog because of timestamp")
+				logx.Info("Skipping oplog because of timestamp")
 			}
 
 		}

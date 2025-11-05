@@ -12,6 +12,8 @@ import (
 
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/bookmark"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/config"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/errors"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/logx"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -31,33 +33,47 @@ func NewMongoReader(uri string) *MongoReader {
 
 func (mr *MongoReader) Read(ctx context.Context, config *config.Config,
 	p parser.Parser, oplogChan chan<- parser.Oplog,
-	errChan chan<- error, wg *sync.WaitGroup) {
+	errChan chan<- errors.AppError, wg *sync.WaitGroup) {
 
 	// connString := "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
 	defer close(oplogChan)
 
-	client, err := mongo.Connect(options.Client().ApplyURI(mr.uri))
+	clientOpts := options.Client().
+		ApplyURI(mr.uri).
+		SetServerSelectionTimeout(2 * time.Second).
+		SetConnectTimeout(2 * time.Second)
+
+	client, err := mongo.Connect(clientOpts)
 	if err != nil {
-		errChan <- fmt.Errorf("error connections to mongo client -> %v", err)
+		errors.SendFatal(errChan, fmt.Errorf("failed to create Mongo client: %w", err))
 	}
 
 	defer func() {
-		if err := client.Disconnect(ctx); err != nil {
-			errChan <- fmt.Errorf("disconnect from monogdb -> %v", err)
+		discCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := client.Disconnect(discCtx); err != nil {
+			logx.Info("warning: disconnect timeout or failure -> %v", err)
 		}
 	}()
 
+	logx.Info("Trying to ping MongoDB...")
+
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
-		fmt.Println("error with ping to mongo database")
-		errChan <- fmt.Errorf("ping err -> %v", err)
+		errors.SendFatal(errChan, fmt.Errorf("error with ping to mongodb -> %v", err))
+
+		go func() {
+			_ = client.Disconnect(context.Background())
+		}()
+
+		return
 	}
 
 	bk, err := bookmark.Load("bookmark.json")
 	if err != nil {
 		if err != io.EOF {
-			errChan <- fmt.Errorf("couldn't decode timestamp json into bookmark struct: %s", err)
+			errors.SendWarn(errChan, fmt.Errorf("couldn't decode timestamp json into bookmark struct: %s", err))
 		} else {
-			fmt.Println("Empty file")
+			logx.Info("Empty file")
 		}
 	}
 
@@ -66,7 +82,7 @@ func (mr *MongoReader) Read(ctx context.Context, config *config.Config,
 	if bk.LastTS.T == 0 {
 		startTs, err = ReadOplogLatest(client)
 		if err != nil {
-			errChan <- fmt.Errorf("error getting latest Ts from oplog -> %v", err)
+			errors.SendWarn(errChan, fmt.Errorf("error getting latest Ts from oplog -> %v", err))
 		}
 
 	} else {
@@ -75,14 +91,14 @@ func (mr *MongoReader) Read(ctx context.Context, config *config.Config,
 
 	cursor, err := OpenTailableCursor(ctx, client, startTs)
 	if err != nil {
-		errChan <- fmt.Errorf("failed to open tailable cursor: %w", err)
+		errors.SendFatal(errChan, fmt.Errorf("failed to open tailable cursor: %w", err))
 	}
 
 	defer cursor.Close(ctx)
 
 	err = ProcessOplogs(ctx, cursor, p, config, oplogChan, bk)
 	if err != nil {
-		errChan <- fmt.Errorf("oplog processing failed: %w", err)
+		errors.SendWarn(errChan, fmt.Errorf("oplog processing failed: %w", err))
 	}
 
 }
@@ -107,7 +123,7 @@ func ReadOplogLatest(client *mongo.Client) (bson.Timestamp, error) {
 
 	timeStamp.T, timeStamp.I = doc.Ts.Timestamp()
 
-	fmt.Println("Latest oplog entry:", doc.Ts)
+	logx.Info("Latest oplog entry -> %v", doc.Ts)
 	return timeStamp, nil
 }
 
@@ -126,7 +142,7 @@ func OpenTailableCursor(ctx context.Context, client *mongo.Client, startTs bson.
 		return nil, fmt.Errorf("failed to open tailable cursor: %w", err)
 	}
 
-	fmt.Println("Tailable cursor opened from ts:", startTs)
+	logx.Info("Tailable cursor opened from ts -> %v", startTs)
 	return cursor, nil
 
 }
@@ -134,11 +150,10 @@ func OpenTailableCursor(ctx context.Context, client *mongo.Client, startTs bson.
 func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p parser.Parser, config *config.Config,
 	oplogChan chan<- parser.Oplog, savedBookmark parser.Bookmark) error {
 
-	fmt.Println("Entering here")
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Context cancelled, stopping oplog processing")
+			logx.Info("Context cancelled, stopping oplog processing")
 			return nil
 		default:
 		}
@@ -146,22 +161,22 @@ func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p parser.Parser, c
 
 			var data bson.M
 			if err := cursor.Decode(&data); err != nil {
-				fmt.Println("failed to decode oplog entry:", err)
+				logx.Info("failed to decode oplog entry -> %v", err)
 				continue
 			}
 
 			jsonData, err := json.Marshal(data)
 			if err != nil {
-				fmt.Println("failed to marshal json", err)
+				logx.Info("failed to marshal json -> %v", err)
 				continue
 			}
 
-			// fmt.Println("Json data is", string(jsonData))
+			logx.Info("Json data ->  %v", string(jsonData))
 
 			var entry parser.Oplog
 			err = json.Unmarshal(jsonData, &entry)
 			if err != nil {
-				fmt.Println("failed to unmarshal json", err)
+				logx.Info("failed to unmarshal json -> %v", err)
 			} else {
 				switch entry.Op {
 				case "i", "u", "d":
@@ -170,7 +185,7 @@ func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p parser.Parser, c
 
 					if !slices.Contains(systemNamespace, namespaceCollection) {
 
-						fmt.Printf("entry is %+v", entry)
+						logx.Info("entry is %+v", entry.Record)
 						oplogChan <- entry
 					}
 				default:
@@ -181,12 +196,12 @@ func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p parser.Parser, c
 		}
 
 		if err := cursor.Err(); err != nil {
-			fmt.Println("Closing down cursor...")
+			logx.Info("Closing down cursor...")
 			return nil
 		}
 
 		if cursor.ID() == 0 {
-			fmt.Println("Cursor closed by server, existing loop")
+			logx.Info("Cursor closed by server, existing loop")
 			break
 		}
 

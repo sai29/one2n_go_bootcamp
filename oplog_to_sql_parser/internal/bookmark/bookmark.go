@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/errors"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/logx"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
 )
 
@@ -32,29 +34,28 @@ func Load(path string) (parser.Bookmark, error) {
 	if err != nil {
 		return parser.Bookmark{}, nil
 	}
-	// fmt.Printf("Bookmark is %+v\n", bk)
+	logx.Info("Bookmark -> %+v", bk)
 
 	return bk, nil
 
 }
 
-func BookmarkWorker(ctx context.Context, bookmarkChan chan map[string]int, errChan chan error) {
+func BookmarkWorker(ctx context.Context, bookmarkChan chan map[string]int, errChan chan errors.AppError) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case bk, ok := <-bookmarkChan:
 			if !ok {
-				fmt.Println("bookmkark worker returning after bookmarkChan closed.")
+				logx.Info("Bookmark worker returning after bookmarkChan closed.")
 				return
 			}
 
-			// fmt.Println("Bookmark is", bk)
 			if err := SaveBookmark("bookmark.json", bk["currentT"], bk["currentI"]); err != nil {
-				fmt.Println("error saving bookmark timestamp", err)
-				errChan <- fmt.Errorf("error saving bookmark timestamp -> %s", err)
+				logx.Error("error saving bookmark timestamp -> %s", err)
+				errors.SendWarn(errChan, fmt.Errorf("error saving bookmark timestamp -> %s", err))
 			} else {
-				fmt.Println("saved bookmark successfully ->", bk)
+				logx.Info("Saved bookmark successfuly -> %v", bk)
 			}
 
 		}
