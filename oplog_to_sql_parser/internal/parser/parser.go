@@ -3,6 +3,8 @@ package parser
 import (
 	"context"
 	"fmt"
+
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/logx"
 )
 
 type Parser interface {
@@ -66,7 +68,6 @@ func (p *parser) ParserWorker(ctx context.Context) {
 			}
 			sql, err := p.GenerateSql(req.Oplog)
 			req.RespChan <- ParserResp{Sql: sql, Err: err}
-			fmt.Println("Closing req.RespChan")
 			close(req.RespChan)
 		}
 	}
@@ -101,7 +102,7 @@ func (p *parser) HandleOplog(oplog Oplog) ([]string, error) {
 		insertSql, err := insertSql(oplog, insertColumns)
 
 		if err != nil {
-			fmt.Println("Error in insert sql is ->", err)
+			logx.Error("error in insert sql -> %v", err)
 			return []string{}, err
 		} else {
 

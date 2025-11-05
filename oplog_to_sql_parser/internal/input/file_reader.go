@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/config"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/errors"
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/logx"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
 )
 
@@ -20,14 +22,15 @@ func NewFileReader(filePath string) *FileReader {
 }
 
 func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p parser.Parser,
-	oplogChan chan<- parser.Oplog, errChan chan<- error, wg *sync.WaitGroup) {
+	oplogChan chan<- parser.Oplog, errChan chan<- errors.AppError, wg *sync.WaitGroup) {
 
-	fmt.Println("inside FileReader")
+	logx.Info("Entering FileReader")
 	defer close(oplogChan)
 
 	file, err := os.Open(config.Input.InputFile)
 	if err != nil {
-		errChan <- fmt.Errorf("error opening the file -> %v", err)
+		errors.SendFatal(errChan, fmt.Errorf("error opening the file -> %v", err))
+		return
 	}
 
 	defer file.Close()
@@ -36,33 +39,32 @@ func (fr *FileReader) Read(streamCtx context.Context, config *config.Config, p p
 
 	t, err := dec.Token()
 	if err != nil {
-		errChan <- fmt.Errorf("error with json input -> %v", err)
+		errors.SendFatal(errChan, fmt.Errorf("error with json input -> %v", err))
 	}
 
 	if delim, ok := t.(json.Delim); !ok || delim != '[' {
-		errChan <- fmt.Errorf("expected [ at start of JSON array")
+		errors.SendFatal(errChan, fmt.Errorf("expected [ at start of JSON array -> %v", err))
 	}
 
 	for dec.More() {
 		var entry parser.Oplog
 		if err := dec.Decode(&entry); err != nil {
-			errChan <- fmt.Errorf("error decoding json into Oplog struct")
+			errors.SendWarn(errChan, fmt.Errorf("error decoding json into Oplog struct -> %v", err))
 			continue
 		} else {
-			// fmt.Println("Sending oplog from file to db worker")
 			oplogChan <- entry
 		}
 	}
 
 	t, err = dec.Token()
 	if err != nil {
-		errChan <- fmt.Errorf("%v", err)
+		errors.SendWarn(errChan, fmt.Errorf("malformed ending -> %v", err))
 	}
 
 	if delim, ok := t.(json.Delim); !ok || delim != ']' {
-		errChan <- fmt.Errorf("expected ] at the end of JSON array")
+		errors.SendWarn(errChan, fmt.Errorf("expected ] at the end of JSON array"))
 	}
 
-	fmt.Println("Exiting file reader")
+	logx.Info("Exiting FileReader")
 
 }

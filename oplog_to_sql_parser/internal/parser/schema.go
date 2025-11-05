@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/logx"
 )
 
 func (p *parser) saveCurrentTableColumns(record any, tableName string) {
@@ -116,7 +118,7 @@ func (p *parser) generateNestedTableStatements(nestedColumns []string, oplog Opl
 				if p.tableNotPresent(linkedTableName) {
 					linkedTableCreate, err := p.createLinkedTable(oplog.Namespace, nestedColumn, nestedValue)
 					if err != nil {
-						fmt.Println("Error generating linked table ->", err)
+						logx.Error("Error generating linked table -> %v", err)
 						return nil, err
 					} else {
 						if linkedTableCreate != "" {

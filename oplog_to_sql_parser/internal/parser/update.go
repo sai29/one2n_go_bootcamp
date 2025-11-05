@@ -3,6 +3,8 @@ package parser
 import (
 	"fmt"
 	"strings"
+
+	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/logx"
 )
 
 func updateSql(oplog Oplog) (string, error) {
@@ -11,13 +13,13 @@ func updateSql(oplog Oplog) (string, error) {
 
 	diff, ok := oplog.Record["diff"].(map[string]interface{})
 	if !ok {
-		fmt.Println("Error fetching diff for UPDATE statement")
+		logx.Error("error fetching diff for UPDATE statement")
 		return "", fmt.Errorf("error fetching diff for UPDATE statement")
 	}
 
 	fieldsToUpdate, ok := diff["u"].(map[string]interface{})
 	if !ok {
-		fmt.Println("Error fetching u for UPDATE statement")
+		logx.Error("error fetching diff[u] for UPDATE statement")
 		return "", fmt.Errorf("error fetching u for UPDATE statement")
 	}
 
