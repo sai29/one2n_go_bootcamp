@@ -11,6 +11,7 @@ type Parser interface {
 	GenerateSql(oplog Oplog) ([]string, error)
 	ParserWorker(ctx context.Context)
 	GetParserReqChan() chan ParserRequest
+	SetIDGenerator(fn func(int) string)
 }
 
 type parser struct {
@@ -53,6 +54,10 @@ func NewParser() Parser {
 		linkedTableStatements: make(map[string][]string), IdGenerator: randString, parserReqChan: make(chan ParserRequest, 100)}
 }
 
+func (p *parser) SetIDGenerator(fn func(int) string) {
+	p.IdGenerator = fn
+}
+
 func (p *parser) GetParserReqChan() chan ParserRequest {
 	return p.parserReqChan
 }
@@ -74,13 +79,16 @@ func (p *parser) ParserWorker(ctx context.Context) {
 }
 
 func (p *parser) GenerateSql(oplog Oplog) ([]string, error) {
+	fmt.Printf("%#v\n", oplog)
 	sql, err := p.HandleOplog(oplog)
+
+	fmt.Printf("%#v\n", sql)
+
 	if err != nil {
 		return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)
 	} else {
 		return sql, nil
 	}
-
 }
 
 func (p *parser) HandleOplog(oplog Oplog) ([]string, error) {

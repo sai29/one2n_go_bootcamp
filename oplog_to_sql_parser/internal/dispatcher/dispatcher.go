@@ -146,7 +146,7 @@ func (dbW *dbWorker) collectionWorker(ctx context.Context, oplog chan parser.Opl
 			collection := nameSpace[1]
 
 			logx.Info("Inside collection worker of collection -> %v", collection)
-			logx.Info("Processing oplog -> %+v", oplog.TimeStamp)
+			// logx.Info("Processing oplog -> %+v", oplog.TimeStamp)
 
 			bk, err := bookmark.Load("bookmark.json")
 			if err != nil {
