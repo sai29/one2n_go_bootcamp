@@ -4,7 +4,7 @@
 
 This project converts **MongoDB oplog entries** (`insert`, `update`, `delete`) into equivalent **SQL statements** that can be executed on a relational database (like PostgreSQL).  
 
-It enables live or batch data migration by continuously parsing MongoDB oplogs and mirroring changes on SQL tables.
+It enables live or batch data migration by continuously parsing MongoDB oplogs and mirroring changes on SQL tables. Use your oplog live stream or an oplog json file as input and write to a SQL file or directly to Postgres.
 
 ---
 
@@ -30,6 +30,9 @@ This tool reads those oplogs and **translates them into SQL** to maintain an up-
 | 7 | Nested documents → handles nested objects/arrays as separate tables | ✅ |
 | 8 | File I/O → reads oplogs from JSON file, writes SQL to output file | ✅ |
 | 9 | MongoDB streaming → reads oplogs directly from MongoDB and applies to PostgreSQL | ✅ |
+| 10 | Bookmarking Support → Parser can keep track of the last oplog, resume processing from the correct point after a restart.| ✅ |
+| 11 | Distributed Execution → Distribute the parser's execution across multiple machines to achieve higher performance and scalability.  | ✅ |
+
 
 ---
 
