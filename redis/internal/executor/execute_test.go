@@ -14,6 +14,11 @@ func TestExecute(t *testing.T) {
 		want  string
 	}{
 		{
+			name:  "COMPACT",
+			input: "COMPACT",
+			want:  "(nil)",
+		},
+		{
 			name:  "SET command",
 			input: "SET name foo",
 			want:  "OK",
@@ -146,7 +151,7 @@ func TestExecute(t *testing.T) {
 		{
 			name:  "COMPACT",
 			input: "COMPACT",
-			want:  "SET baz 1\nSET counter 7\nSET counter1 10\nSET fooz 1\nSET second bar\n",
+			want:  "SET baz 1\nSET counter 7\nSET counter1 10\nSET fooz 1\nSET second bar",
 		},
 	}
 

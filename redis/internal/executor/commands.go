@@ -154,14 +154,24 @@ func (s *Store) exec() string {
 func (s *Store) compact() string {
 	var b strings.Builder
 	var keys []string
+
 	for key := range s.Data {
 		keys = append(keys, key)
 
 	}
-	slices.Sort(keys)
 
-	for _, key := range keys {
-		fmt.Fprintf(&b, "SET %s %s\n", key, s.Data[key])
+	if len(keys) == 0 {
+		return "(nil)"
+	}
+
+	slices.Sort(keys)
+	for index, key := range keys {
+
+		fmt.Fprintf(&b, "SET %s %s", key, s.Data[key])
+		if index != len(keys)-1 {
+			b.WriteString("\n")
+		}
+
 	}
 
 	return b.String()
