@@ -22,8 +22,12 @@ func executeCommand(input io.Reader) {
 			break
 		}
 		line := scanner.Text()
-		output := store.Execute(line)
-		fmt.Println(">", output)
+		command := executor.CreateCommand(line)
+
+		output := store.Execute(command)
+		for _, val := range output {
+			fmt.Println(">", val)
+		}
 	}
 
 	if err := scanner.Err(); err != nil {

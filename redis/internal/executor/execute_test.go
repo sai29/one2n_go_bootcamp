@@ -83,13 +83,74 @@ func TestExecute(t *testing.T) {
 			input: "INCRBY counter1 10",
 			want:  "(integer) 10",
 		},
+		{
+			name:  "MULTI with exec",
+			input: "MULTI",
+			want:  "OK",
+		},
+		{
+			name:  "INCR inside multi",
+			input: "INCR fooz",
+			want:  "QUEUED",
+		},
+		{
+			name:  "SET inside multi",
+			input: "SET baz 1",
+			want:  "QUEUED",
+		},
+		{
+			name:  "EXEC for multi",
+			input: "EXEC",
+			want:  "1) (integer) 1\n2) OK",
+		},
+		{
+			name:  "MULTI with discard",
+			input: "MULTI",
+			want:  "OK",
+		},
+		{
+			name:  "INCR inside multi",
+			input: "INCR foo",
+			want:  "QUEUED",
+		},
+		{
+			name:  "SET inside multi",
+			input: "SET baz 1",
+			want:  "QUEUED",
+		},
+		{
+			name:  "Multi with discard",
+			input: "DISCARD",
+			want:  "OK",
+		},
+		{
+			name:  "MULTI with multi inside",
+			input: "MULTI",
+			want:  "OK",
+		},
+		{
+			name:  "INCR inside multi",
+			input: "INCR foo",
+			want:  "QUEUED",
+		},
+		{
+			name:  "SET inside multi",
+			input: "SET baz 1",
+			want:  "QUEUED",
+		},
+		{
+			name:  "MULTI inside multi",
+			input: "MULTI",
+			want:  "(error) ERR Command not allowed inside a transaction",
+		},
 	}
 
 	store := executor.NewStore()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := store.Execute(tt.input)
+			command := executor.CreateCommand(tt.input)
+			got := store.Execute(command)
 			if got != tt.want {
 				t.Errorf("Execute() = %v, want %v", got, tt.want)
 			}
