@@ -143,6 +143,11 @@ func TestExecute(t *testing.T) {
 			input: "MULTI",
 			want:  "(error) ERR Command not allowed inside a transaction",
 		},
+		{
+			name:  "COMPACT",
+			input: "COMPACT",
+			want:  "SET baz 1\nSET counter 7\nSET counter1 10\nSET fooz 1\nSET second bar\n",
+		},
 	}
 
 	store := executor.NewStore()

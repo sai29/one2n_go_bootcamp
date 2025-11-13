@@ -2,6 +2,7 @@ package executor
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -147,5 +148,21 @@ func (s *Store) exec() string {
 			b.WriteString("\n")
 		}
 	}
+	return b.String()
+}
+
+func (s *Store) compact() string {
+	var b strings.Builder
+	var keys []string
+	for key := range s.Data {
+		keys = append(keys, key)
+
+	}
+	slices.Sort(keys)
+
+	for _, key := range keys {
+		fmt.Fprintf(&b, "SET %s %s\n", key, s.Data[key])
+	}
+
 	return b.String()
 }

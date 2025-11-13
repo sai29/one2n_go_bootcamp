@@ -33,6 +33,8 @@ func (s *Store) Execute(command command) string {
 		return s.discard()
 	case "exec":
 		return s.exec()
+	case "compact":
+		return s.compact()
 	}
 
 	return ""
