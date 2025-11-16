@@ -157,7 +157,6 @@ func (s *Store) compact() string {
 
 	for key := range s.Data {
 		keys = append(keys, key)
-
 	}
 
 	if len(keys) == 0 {
@@ -166,7 +165,6 @@ func (s *Store) compact() string {
 
 	slices.Sort(keys)
 	for index, key := range keys {
-
 		fmt.Fprintf(&b, "SET %s %s", key, s.Data[key])
 		if index != len(keys)-1 {
 			b.WriteString("\n")
