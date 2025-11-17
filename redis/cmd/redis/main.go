@@ -81,7 +81,7 @@ func handleConn(ctx context.Context, conn net.Conn, dbMaster *executor.DbMaster)
 
 		store := dbMaster.Dbs[session.CurrentDbIndex]
 
-		output := session.Execute(cmd, &store)
+		output := session.Execute(cmd, store)
 
 		fmt.Fprintln(conn, output)
 

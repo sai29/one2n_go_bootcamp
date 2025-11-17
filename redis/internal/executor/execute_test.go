@@ -153,6 +153,21 @@ func TestExecute(t *testing.T) {
 			input: "COMPACT",
 			want:  "SET baz 1\nSET counter 7\nSET counter1 10\nSET fooz 1\nSET second bar",
 		},
+		{
+			name:  "SELECT command",
+			input: "SELECT 5",
+			want:  "OK",
+		},
+		{
+			name:  "SELECT command",
+			input: "SELECT 17",
+			want:  "(error) ERR DB index is out of range",
+		},
+		{
+			name:  "SELECT command",
+			input: "SELECT one",
+			want:  "(error) ERR value is not an integer or out of range",
+		},
 	}
 
 	store := executor.NewStore()

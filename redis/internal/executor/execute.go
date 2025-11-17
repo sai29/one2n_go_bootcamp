@@ -5,7 +5,7 @@ import (
 )
 
 type DbMaster struct {
-	Dbs map[int]Store
+	Dbs map[int]*Store
 }
 
 type Store struct {
@@ -19,9 +19,9 @@ type Session struct {
 }
 
 func NewDbMaster() *DbMaster {
-	m := &DbMaster{Dbs: make(map[int]Store)}
+	m := &DbMaster{Dbs: make(map[int]*Store)}
 	for i := 0; i < 16; i++ {
-		m.Dbs[i] = *NewStore()
+		m.Dbs[i] = NewStore()
 	}
 	return m
 }
