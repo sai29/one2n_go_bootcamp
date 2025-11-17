@@ -170,12 +170,13 @@ func TestExecute(t *testing.T) {
 		},
 	}
 
-	store := executor.NewStore()
+	dbMaster := executor.NewDbMaster()
 	session := executor.NewSession()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			command := executor.CreateCommand(tt.input)
+			store := dbMaster.Dbs[session.CurrentDbIndex]
 			got := session.Execute(command, store)
 			if got != tt.want {
 				t.Errorf("Execute() = %v, want %v", got, tt.want)

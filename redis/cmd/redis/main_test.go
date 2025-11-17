@@ -134,5 +134,4 @@ func Test_multipleClients(t *testing.T) {
 	if strings.TrimSpace(got5) != "John" {
 		t.Fatalf("client2 GET after EXEC = %q, want John", got5)
 	}
-
 }
