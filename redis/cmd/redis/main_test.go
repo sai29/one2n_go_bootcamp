@@ -28,7 +28,8 @@ func Test_listenAndServe(t *testing.T) {
 		},
 	}
 
-	store := executor.NewStore()
+	dbMaster := executor.NewDbMaster()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -39,7 +40,7 @@ func Test_listenAndServe(t *testing.T) {
 	defer ln.Close()
 
 	go func() {
-		listenAndServe(ctx, ln, store)
+		listenAndServe(ctx, ln, dbMaster)
 	}()
 
 	addr := ln.Addr().String()

@@ -25,13 +25,13 @@ func CreateCommand(line string) command {
 	}
 }
 
-func (s *Store) get(command command) string {
+func (s *Session) get(command command, store *Store) string {
 	switch s.inTransaction {
 	case true:
 		s.Queued = append(s.Queued, command)
 		return "QUEUED"
 	default:
-		val, ok := s.Data[command.key]
+		val, ok := store.Data[command.key]
 		if !ok {
 			return "(nil)"
 		} else {
@@ -40,34 +40,34 @@ func (s *Store) get(command command) string {
 	}
 }
 
-func (s *Store) set(command command) string {
+func (s *Session) set(command command, store *Store) string {
 	switch s.inTransaction {
 	case true:
 		s.Queued = append(s.Queued, command)
 		return "QUEUED"
 	default:
-		s.Data[command.key] = command.value
+		store.Data[command.key] = command.value
 		return "OK"
 	}
 }
 
-func (s *Store) delete(command command) string {
+func (s *Session) delete(command command, store *Store) string {
 	switch s.inTransaction {
 	case true:
 		s.Queued = append(s.Queued, command)
 		return "QUEUED"
 	default:
-		_, ok := s.Data[command.key]
+		_, ok := store.Data[command.key]
 		if !ok {
 			return "(integer) 0"
 		} else {
-			delete(s.Data, command.key)
+			delete(store.Data, command.key)
 			return "(integer) 1"
 		}
 	}
 }
 
-func (s *Store) increment(command command) string {
+func (s *Session) increment(command command, store *Store) string {
 	switch s.inTransaction {
 	case true:
 		s.Queued = append(s.Queued, command)
@@ -77,9 +77,9 @@ func (s *Store) increment(command command) string {
 			return "(error) ERR wrong number of arguments for 'incr' command"
 		}
 
-		val, ok := s.Data[command.key]
+		val, ok := store.Data[command.key]
 		if !ok {
-			s.Data[command.key] = "1"
+			store.Data[command.key] = "1"
 			return "(integer) 1"
 		} else {
 			intVal, err := strconv.Atoi(val)
@@ -87,14 +87,14 @@ func (s *Store) increment(command command) string {
 				return "(error) ERR value is not an integer or out of range"
 			} else {
 				finalVal := intVal + 1
-				s.Data[command.key] = strconv.Itoa(finalVal)
-				return fmt.Sprintf("(integer) %s", s.Data[command.key])
+				store.Data[command.key] = strconv.Itoa(finalVal)
+				return fmt.Sprintf("(integer) %s", store.Data[command.key])
 			}
 		}
 	}
 }
 
-func (s *Store) incrementBy(command command) string {
+func (s *Session) incrementBy(command command, store *Store) string {
 	switch s.inTransaction {
 	case true:
 		s.Queued = append(s.Queued, command)
@@ -104,10 +104,10 @@ func (s *Store) incrementBy(command command) string {
 			return "(error) ERR wrong number of arguments for 'incrby' command"
 		}
 
-		val, ok := s.Data[command.key]
+		val, ok := store.Data[command.key]
 		if !ok {
-			s.Data[command.key] = command.value
-			return fmt.Sprintf("(integer) %v", s.Data[command.key])
+			store.Data[command.key] = command.value
+			return fmt.Sprintf("(integer) %v", store.Data[command.key])
 		} else {
 
 			intVal, _ := strconv.Atoi(val)
@@ -116,14 +116,14 @@ func (s *Store) incrementBy(command command) string {
 				return "(error) ERR value is not an integer or out of range"
 			} else {
 				finalVal := intVal + intArg
-				s.Data[command.key] = strconv.Itoa(finalVal)
+				store.Data[command.key] = strconv.Itoa(finalVal)
 				return fmt.Sprintf("(integer) %v", finalVal)
 			}
 		}
 	}
 }
 
-func (s *Store) multi() string {
+func (s *Session) multi() string {
 	switch s.inTransaction {
 	case true:
 		return "(error) ERR Command not allowed inside a transaction"
@@ -133,17 +133,17 @@ func (s *Store) multi() string {
 	}
 }
 
-func (s *Store) discard() string {
+func (s *Session) discard() string {
 	s.inTransaction = false
 	s.Queued = nil
 	return "OK"
 }
 
-func (s *Store) exec() string {
+func (s *Session) exec(store *Store) string {
 	var b strings.Builder
 	s.inTransaction = false
 	for index, command := range s.Queued {
-		fmt.Fprintf(&b, "%v) %s", index+1, s.Execute(command))
+		fmt.Fprintf(&b, "%v) %s", index+1, s.Execute(command, store))
 		if index != len(s.Queued)-1 {
 			b.WriteString("\n")
 		}
@@ -151,11 +151,11 @@ func (s *Store) exec() string {
 	return b.String()
 }
 
-func (s *Store) compact() string {
+func (s *Session) compact(store *Store) string {
 	var b strings.Builder
 	var keys []string
 
-	for key := range s.Data {
+	for key := range store.Data {
 		keys = append(keys, key)
 	}
 
@@ -165,7 +165,7 @@ func (s *Store) compact() string {
 
 	slices.Sort(keys)
 	for index, key := range keys {
-		fmt.Fprintf(&b, "SET %s %s", key, s.Data[key])
+		fmt.Fprintf(&b, "SET %s %s", key, store.Data[key])
 		if index != len(keys)-1 {
 			b.WriteString("\n")
 		}
@@ -173,4 +173,16 @@ func (s *Store) compact() string {
 	}
 
 	return b.String()
+}
+
+func (s *Session) selectDb(cmd command) string {
+	idx, err := strconv.Atoi(cmd.key)
+	if err != nil {
+		return "(error) ERR value is not an integer or out of range"
+	}
+	if idx < 0 || idx >= 16 {
+		return "(error) ERR DB index is out of range"
+	}
+	s.CurrentDbIndex = idx
+	return "OK"
 }

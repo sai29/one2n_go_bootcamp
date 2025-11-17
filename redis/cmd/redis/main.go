@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	store := executor.NewStore()
+	dbMaster := executor.NewDbMaster()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	handleInterrupt(cancel)
@@ -27,7 +27,7 @@ func main() {
 	defer ln.Close()
 
 	go func() {
-		if err := listenAndServe(ctx, ln, store); err != nil {
+		if err := listenAndServe(ctx, ln, dbMaster); err != nil {
 			fmt.Println("server error:", err)
 		}
 	}()
@@ -37,7 +37,7 @@ func main() {
 	<-ctx.Done()
 }
 
-func listenAndServe(ctx context.Context, ln net.Listener, store *executor.Store) error {
+func listenAndServe(ctx context.Context, ln net.Listener, dbMaster *executor.DbMaster) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -55,14 +55,15 @@ func listenAndServe(ctx context.Context, ln net.Listener, store *executor.Store)
 			}
 		}
 
-		go handleConn(ctx, conn, store)
+		go handleConn(ctx, conn, dbMaster)
 	}
 }
 
-func handleConn(ctx context.Context, conn net.Conn, store *executor.Store) {
+func handleConn(ctx context.Context, conn net.Conn, dbMaster *executor.DbMaster) {
 	defer conn.Close()
 
 	scanner := bufio.NewScanner(conn)
+	session := executor.NewSession()
 
 	for {
 		select {
@@ -77,7 +78,10 @@ func handleConn(ctx context.Context, conn net.Conn, store *executor.Store) {
 
 		line := scanner.Text()
 		cmd := executor.CreateCommand(line)
-		output := store.Execute(cmd)
+
+		store := dbMaster.Dbs[session.CurrentDbIndex]
+
+		output := session.Execute(cmd, &store)
 
 		fmt.Fprintln(conn, output)
 

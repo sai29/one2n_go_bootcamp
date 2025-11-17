@@ -156,11 +156,12 @@ func TestExecute(t *testing.T) {
 	}
 
 	store := executor.NewStore()
+	session := executor.NewSession()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			command := executor.CreateCommand(tt.input)
-			got := store.Execute(command)
+			got := session.Execute(command, store)
 			if got != tt.want {
 				t.Errorf("Execute() = %v, want %v", got, tt.want)
 			}
