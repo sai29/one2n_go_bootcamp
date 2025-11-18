@@ -25,13 +25,37 @@ func CreateCommand(line string) command {
 	}
 }
 
+func (str *Store) get(key string) (string, bool) {
+	str.mu.RLock()
+	defer str.mu.RUnlock()
+	val, ok := str.Data[key]
+	return val, ok
+}
+
+func (str *Store) set(key string, value string) {
+	str.mu.RLock()
+	defer str.mu.RUnlock()
+	str.Data[key] = value
+}
+
+func (str *Store) delete(key string) bool {
+	str.mu.Lock()
+	_, ok := str.Data[key]
+	if ok {
+		delete(str.Data, key)
+	}
+	str.mu.Unlock()
+	return ok
+
+}
+
 func (s *Session) get(command command, store *Store) string {
 	switch s.inTransaction {
 	case true:
 		s.Queued = append(s.Queued, command)
 		return "QUEUED"
 	default:
-		val, ok := store.Data[command.key]
+		val, ok := store.get(command.key)
 		if !ok {
 			return "(nil)"
 		} else {
@@ -46,7 +70,7 @@ func (s *Session) set(command command, store *Store) string {
 		s.Queued = append(s.Queued, command)
 		return "QUEUED"
 	default:
-		store.Data[command.key] = command.value
+		store.set(command.key, command.value)
 		return "OK"
 	}
 }
@@ -57,7 +81,7 @@ func (s *Session) delete(command command, store *Store) string {
 		s.Queued = append(s.Queued, command)
 		return "QUEUED"
 	default:
-		_, ok := store.Data[command.key]
+		ok := store.delete(command.key)
 		if !ok {
 			return "(integer) 0"
 		} else {
@@ -77,9 +101,9 @@ func (s *Session) increment(command command, store *Store) string {
 			return "(error) ERR wrong number of arguments for 'incr' command"
 		}
 
-		val, ok := store.Data[command.key]
+		val, ok := store.get(command.key)
 		if !ok {
-			store.Data[command.key] = "1"
+			store.set(command.key, "1")
 			return "(integer) 1"
 		} else {
 			intVal, err := strconv.Atoi(val)
@@ -87,7 +111,7 @@ func (s *Session) increment(command command, store *Store) string {
 				return "(error) ERR value is not an integer or out of range"
 			} else {
 				finalVal := intVal + 1
-				store.Data[command.key] = strconv.Itoa(finalVal)
+				store.set(command.key, strconv.Itoa(finalVal))
 				return fmt.Sprintf("(integer) %s", store.Data[command.key])
 			}
 		}
@@ -104,19 +128,18 @@ func (s *Session) incrementBy(command command, store *Store) string {
 			return "(error) ERR wrong number of arguments for 'incrby' command"
 		}
 
-		val, ok := store.Data[command.key]
+		val, ok := store.get(command.key)
 		if !ok {
-			store.Data[command.key] = command.value
+			store.set(command.key, command.value)
 			return fmt.Sprintf("(integer) %v", store.Data[command.key])
 		} else {
-
 			intVal, _ := strconv.Atoi(val)
 			intArg, err := strconv.Atoi(command.value)
 			if err != nil {
 				return "(error) ERR value is not an integer or out of range"
 			} else {
 				finalVal := intVal + intArg
-				store.Data[command.key] = strconv.Itoa(finalVal)
+				store.set(command.key, strconv.Itoa(finalVal))
 				return fmt.Sprintf("(integer) %v", finalVal)
 			}
 		}

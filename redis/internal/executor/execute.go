@@ -2,6 +2,7 @@ package executor
 
 import (
 	"strings"
+	"sync"
 )
 
 type DbMaster struct {
@@ -10,6 +11,7 @@ type DbMaster struct {
 
 type Store struct {
 	Data map[string]string
+	mu   sync.RWMutex
 }
 
 type Session struct {
