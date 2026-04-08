@@ -1,32 +1,65 @@
 package executor
 
-import "strings"
+import (
+	"strings"
+	"sync"
+)
 
-var store = map[string]string{}
+type DbMaster struct {
+	Dbs map[int]*Store
+}
 
-func Execute(input string) string {
-	inputArgs := strings.Split(input, " ")
+type Store struct {
+	Data map[string]string
+	mu   sync.RWMutex
+}
 
-	switch inputArgs[0] {
-	case "SET":
-		store[inputArgs[1]] = inputArgs[2]
-		return "OK"
-	case "GET":
-		val, ok := store[inputArgs[1]]
-		if !ok {
-			return "(nil)"
-		} else {
-			return val
-		}
-	case "DEL":
-		_, ok := store[inputArgs[1]]
-		if !ok {
-			return "(integer) 0"
-		} else {
-			delete(store, inputArgs[1])
-			return "(integer) 1"
+type Session struct {
+	Queued         []command
+	inTransaction  bool
+	CurrentDbIndex int
+}
 
-		}
+func NewDbMaster() *DbMaster {
+	m := &DbMaster{Dbs: make(map[int]*Store)}
+	for i := 0; i < 16; i++ {
+		m.Dbs[i] = NewStore()
 	}
+	return m
+}
+
+func NewStore() *Store {
+	return &Store{Data: map[string]string{}}
+}
+
+func NewSession() *Session {
+	return &Session{inTransaction: false, CurrentDbIndex: 0}
+}
+
+func (s *Session) Execute(command command, store *Store) string {
+
+	switch strings.ToLower(command.command) {
+	case "set":
+		return s.set(command, store)
+	case "get":
+		return s.get(command, store)
+	case "del":
+		return s.delete(command, store)
+	case "incr":
+		return s.increment(command, store)
+	case "incrby":
+		return s.incrementBy(command, store)
+	case "multi":
+		return s.multi()
+	case "discard":
+		return s.discard()
+	case "exec":
+		return s.exec(store)
+	case "compact":
+		return s.compact(store)
+	case "select":
+		return s.selectDb(command)
+	}
+
 	return ""
 }
