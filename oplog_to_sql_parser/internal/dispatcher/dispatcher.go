@@ -65,7 +65,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, oplog <-chan parser.Oplog,
 					dbChan:          make(chan parser.Oplog, 100),
 					collectionChans: make(map[string]chan parser.Oplog),
 					parser:          d.parser,
-					collectionWg:    &sync.WaitGroup{},
+					// collectionWg:    &sync.WaitGroup{},
 					bookmarkChan:    bookmarkChan,
 				}
 

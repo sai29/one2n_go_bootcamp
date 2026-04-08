@@ -20,7 +20,7 @@ type Bookmark struct {
 }
 
 func Load(path string) (parser.Bookmark, error) {
-	tsFile, err := os.OpenFile("bookmark.json", os.O_RDONLY, 0644)
+	tsFile, err := os.OpenFile(path, os.O_RDONLY, 0644)
 	if err != nil {
 		return parser.Bookmark{}, err
 	}
@@ -32,7 +32,7 @@ func Load(path string) (parser.Bookmark, error) {
 
 	err = tsDec.Decode(&bk)
 	if err != nil {
-		return parser.Bookmark{}, nil
+		return parser.Bookmark{}, err
 	}
 	logx.Info("Bookmark -> %+v", bk)
 

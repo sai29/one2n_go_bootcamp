@@ -82,7 +82,7 @@ func isValidMongoUri(uri string) bool {
 }
 
 func isValidPostgresUri(uri string) bool {
-	return strings.HasPrefix(uri, "mongodb://")
+	return strings.HasPrefix(uri, "postgres://") || strings.HasPrefix(uri, "postgresql://")
 }
 
 func bothInputFlagsPresent(flags *Config) bool {

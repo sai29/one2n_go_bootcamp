@@ -79,10 +79,10 @@ func (p *parser) ParserWorker(ctx context.Context) {
 }
 
 func (p *parser) GenerateSql(oplog Oplog) ([]string, error) {
-	fmt.Printf("%#v\n", oplog)
+	// fmt.Printf("%#v\n", oplog)
 	sql, err := p.HandleOplog(oplog)
 
-	fmt.Printf("%#v\n", sql)
+	// fmt.Printf("%#v\n", sql)
 
 	if err != nil {
 		return []string{}, fmt.Errorf("error parsing oplog struct -> %v", err)

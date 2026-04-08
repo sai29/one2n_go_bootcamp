@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/errors"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/input"
@@ -16,25 +15,25 @@ type FileWriter struct {
 	uri string
 }
 
-func NewFileWriter(uri string) *FileWriter {
-	return &FileWriter{uri: uri}
+func NewFileWriter(uri string) (*FileWriter, error) {
+	if uri == "" {
+		return nil, fmt.Errorf("invalid or empty uri")
+	}
+	return &FileWriter{uri: uri}, nil
 }
 
 func (fr *FileWriter) Write(ctx context.Context, sqlChan <-chan input.SqlStatement, errChan chan<- errors.AppError) {
-	var file *os.File
-	var err error
-	file, err = parser.OpenOrCreateFile(fr.uri)
+	file, err := parser.OpenOrCreateFile(fr.uri)
 	if err != nil {
 		errors.SendFatal(errChan, fmt.Errorf("failed to create or open file: %w", err))
 		return
 	}
 	defer file.Close()
 
-	writer := bufio.NewWriter(file)
+	bw := bufio.NewWriter(file)
 	defer func() {
-		err = writer.Flush()
-		if err != nil {
-			logx.Info("error flushing file -> %s", err)
+		if flushErr := bw.Flush(); flushErr != nil {
+			errors.SendWarn(errChan, fmt.Errorf("error flushing file -> %w", flushErr))
 			return
 		}
 	}()
@@ -54,10 +53,9 @@ func (fr *FileWriter) Write(ctx context.Context, sqlChan <-chan input.SqlStateme
 				continue
 			}
 
-			if _, err = file.WriteString(stmt.Sql + "\n"); err != nil {
-				errors.SendWarn(errChan, fmt.Errorf("error writing to file sql %v -> %w", stmt.Sql, err))
+			if _, err = bw.WriteString(stmt.Sql + "\n"); err != nil {
+				errors.SendWarn(errChan, fmt.Errorf("error writing to file sql %q -> %w", stmt.Sql, err))
 			}
-
 		}
 	}
 }

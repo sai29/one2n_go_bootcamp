@@ -16,10 +16,10 @@ type PostgresWriter struct {
 	db *sql.DB
 }
 
-func NewPostgresWriter(uri string, errChan chan<- errors.AppError) *PostgresWriter {
-	db, err := sql.Open("postgres", "postgres://oplog_replica:password@localhost/oplog_replica?sslmode=disable")
+func NewPostgresWriter(uri string) (*PostgresWriter, error) {
+	db, err := sql.Open("postgres", uri)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	db.SetMaxOpenConns(25)
@@ -27,7 +27,8 @@ func NewPostgresWriter(uri string, errChan chan<- errors.AppError) *PostgresWrit
 
 	duration, err := time.ParseDuration("15m")
 	if err != nil {
-		errors.SendFatal(errChan, fmt.Errorf("error connectiong to postgres db -> %w", err))
+		db.Close()
+		return nil, err
 		// panic(err)
 	}
 
@@ -35,13 +36,14 @@ func NewPostgresWriter(uri string, errChan chan<- errors.AppError) *PostgresWrit
 
 	err = db.Ping()
 	if err != nil {
-		errors.SendFatal(errChan, fmt.Errorf("error withi ping to postgres db -> %w", err))
+		db.Close()
+		return nil, err
 		// panic(err)
 	} else {
 		logx.Info("Connected to and pinged Postgres DB")
 	}
 
-	return &PostgresWriter{db: db}
+	return &PostgresWriter{db: db}, nil
 }
 
 func (pw *PostgresWriter) Write(ctx context.Context, sqlChan <-chan input.SqlStatement, errChan chan<- errors.AppError) {

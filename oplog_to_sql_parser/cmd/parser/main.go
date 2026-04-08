@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -49,7 +50,8 @@ var rootCmd = &cobra.Command{
 		handleInterrupt(ctxCancel)
 
 		if err := config.ValidateConfig(flagCfg); err != nil {
-			logx.Warn("error validating input flags -> %v", err)
+			logx.Error("error validating input flags -> %v", err)
+			return err
 		}
 
 		if err := oplogToSql(ctx); err != nil {
@@ -72,7 +74,10 @@ func oplogToSql(ctx context.Context) error {
 	dispatcher := dispatcher.NewDispatcher(p)
 
 	reader := createReader(flagCfg)
-	writer := createWriter(flagCfg, errChan)
+	writer, err := createWriter(flagCfg)
+	if err != nil {
+		return err
+	}
 
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -140,11 +145,16 @@ func createReader(flags *config.Config) input.Reader {
 	return input.NewMongoReader(flags.Input.InputUri)
 }
 
-func createWriter(config *config.Config, errChan chan errors.AppError) output.Writer {
-	if config.Output.OutputMethod == "file" {
+func createWriter(config *config.Config) (output.Writer, error) {
+	switch config.Output.OutputMethod {
+	case "file":
 		return output.NewFileWriter(config.Output.OutputFile)
+	case "postgres":
+		return output.NewPostgresWriter(config.Output.OutputUri)
+	default:
+		return nil, fmt.Errorf("unknown output method: %q", config.Output.OutputMethod)
 	}
-	return output.NewPostgresWriter(config.Output.OutputUri, errChan)
+
 }
 
 func handleInterrupt(cancel context.CancelFunc) {
