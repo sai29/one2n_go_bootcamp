@@ -3,7 +3,6 @@ package dispatcher
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 
@@ -34,8 +33,8 @@ func NewDispatcher(p parser.Parser) *Dispatcher {
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, oplog <-chan parser.Oplog,
-	bookmarkChan chan map[string]int, sqlChan chan input.SqlStatement, errChan chan<- errors.AppError, wg *sync.WaitGroup) {
-	defer wg.Done()
+	bookmarkChan chan map[string]int, sqlChan chan input.SqlStatement, errChan chan<- errors.AppError,
+	wg *sync.WaitGroup, bk *parser.Bookmark) {
 
 	for {
 		select {
@@ -48,6 +47,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, oplog <-chan parser.Oplog,
 					close(worker.dbChan)
 				}
 				d.dbWorkerWg.Wait()
+				close(bookmarkChan)
 				close(sqlChan)
 				close(d.parser.GetParserReqChan())
 
@@ -65,7 +65,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, oplog <-chan parser.Oplog,
 					dbChan:          make(chan parser.Oplog, 100),
 					collectionChans: make(map[string]chan parser.Oplog),
 					parser:          d.parser,
-					// collectionWg:    &sync.WaitGroup{},
+					collectionWg:    &sync.WaitGroup{},
 					bookmarkChan:    bookmarkChan,
 				}
 
@@ -76,7 +76,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, oplog <-chan parser.Oplog,
 				go func() {
 					logx.Info("Calling DB worker")
 					defer d.dbWorkerWg.Done()
-					worker.processDB(ctx, errChan, sqlChan, wg)
+					worker.processDB(ctx, errChan, sqlChan, wg, bk)
 				}()
 			}
 
@@ -91,7 +91,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, oplog <-chan parser.Oplog,
 }
 
 func (dbW *dbWorker) processDB(ctx context.Context, errChan chan<- errors.AppError,
-	sqlChan chan input.SqlStatement, wg *sync.WaitGroup) {
+	sqlChan chan input.SqlStatement, wg *sync.WaitGroup, bk *parser.Bookmark) {
 	logx.Info("Entering DB worker")
 	defer wg.Done()
 
@@ -115,11 +115,11 @@ func (dbW *dbWorker) processDB(ctx context.Context, errChan chan<- errors.AppErr
 			if _, exists := dbW.collectionChans[collection]; !exists {
 				collectionChan := make(chan parser.Oplog, 100)
 				dbW.collectionChans[collection] = collectionChan
-
+				fmt.Printf("%#v\n", dbW)
 				dbW.collectionWg.Add(1)
 				wg.Add(1)
 				logx.Info("Calling Collections worker")
-				go dbW.collectionWorker(ctx, collectionChan, sqlChan, errChan, wg)
+				go dbW.collectionWorker(ctx, collectionChan, sqlChan, errChan, wg, bk)
 			}
 			dbW.collectionChans[collection] <- oplog
 		}
@@ -128,7 +128,7 @@ func (dbW *dbWorker) processDB(ctx context.Context, errChan chan<- errors.AppErr
 }
 
 func (dbW *dbWorker) collectionWorker(ctx context.Context, oplog chan parser.Oplog,
-	sqlChan chan input.SqlStatement, errChan chan<- errors.AppError, wg *sync.WaitGroup) {
+	sqlChan chan input.SqlStatement, errChan chan<- errors.AppError, wg *sync.WaitGroup, bk *parser.Bookmark) {
 
 	defer wg.Done()
 	defer dbW.collectionWg.Done()
@@ -147,15 +147,6 @@ func (dbW *dbWorker) collectionWorker(ctx context.Context, oplog chan parser.Opl
 
 			logx.Info("Inside collection worker of collection -> %v", collection)
 			// logx.Info("Processing oplog -> %+v", oplog.TimeStamp)
-
-			bk, err := bookmark.Load("bookmark.json")
-			if err != nil {
-				if err != io.EOF {
-					errors.SendWarn(errChan, fmt.Errorf("couldn't decode timestamp json into bookmark struct: %s", err))
-				} else {
-					logx.Info("Empty file")
-				}
-			}
 
 			bkTimeStamp, bkIncrement := bk.LastTS.T, bk.LastTS.I
 
@@ -180,7 +171,7 @@ func (dbW *dbWorker) collectionWorker(ctx context.Context, oplog chan parser.Opl
 						return
 					}
 					if resp.Err != nil {
-						errors.SendWarn(errChan, fmt.Errorf("error from GetSqlStatements -> %v", err))
+						errors.SendWarn(errChan, fmt.Errorf("error from GetSqlStatements -> %v", resp.Err))
 					} else {
 						for _, stmt := range resp.Sql {
 							sqlChan <- input.SqlStatement{Sql: stmt, IsBoundary: false}

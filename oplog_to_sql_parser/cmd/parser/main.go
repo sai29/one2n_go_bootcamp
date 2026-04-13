@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"sync"
@@ -70,10 +71,19 @@ func oplogToSql(ctx context.Context) error {
 	sqlChan := make(chan input.SqlStatement, 100)
 	errChan := make(chan errors.AppError, 10)
 
+	lastSavedBk, err := bookmark.Load("data/bookmark.json")
+	if err != nil {
+		if err != io.EOF {
+			errors.SendWarn(errChan, fmt.Errorf("couldn't decode timestamp json into bookmark struct: %s", err))
+		} else {
+			logx.Info("Empty file")
+		}
+	}
+
 	p := parser.NewParser()
 	dispatcher := dispatcher.NewDispatcher(p)
 
-	reader := createReader(flagCfg)
+	reader := createReader(flagCfg, &lastSavedBk)
 	writer, err := createWriter(flagCfg)
 	if err != nil {
 		return err
@@ -105,7 +115,7 @@ func oplogToSql(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		logx.Info("Entering Bookmark worker")
-		bookmark.BookmarkWorker(streamCtx, bookmarkChan, errChan)
+		bookmark.BookmarkWorker(streamCtx, bookmarkChan, errChan, &lastSavedBk)
 	}()
 
 	wg.Add(1)
@@ -119,7 +129,7 @@ func oplogToSql(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		logx.Info("Entering Dispatch worker")
-		dispatcher.Dispatch(streamCtx, oplogChan, bookmarkChan, sqlChan, errChan, &wg)
+		dispatcher.Dispatch(streamCtx, oplogChan, bookmarkChan, sqlChan, errChan, &wg, &lastSavedBk)
 	}()
 
 	wg.Add(1)
@@ -132,17 +142,17 @@ func oplogToSql(ctx context.Context) error {
 
 	logx.Info("Closing all main.go channels")
 
-	close(bookmarkChan)
+	// close(bookmarkChan)
 	close(errChan)
 
 	return nil
 }
 
-func createReader(flags *config.Config) input.Reader {
+func createReader(flags *config.Config, lastSavedBk *parser.Bookmark) input.Reader {
 	if flags.Input.InputMethod == "file" {
 		return input.NewFileReader(flags.Input.InputFile)
 	}
-	return input.NewMongoReader(flags.Input.InputUri)
+	return input.NewMongoReader(flags.Input.InputUri, lastSavedBk)
 }
 
 func createWriter(config *config.Config) (output.Writer, error) {

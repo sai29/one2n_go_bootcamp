@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/bookmark"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/config"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/errors"
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/logx"
@@ -25,10 +23,11 @@ var systemNamespace = []string{"admin", "local", "config"}
 
 type MongoReader struct {
 	uri string
+	bk  *parser.Bookmark
 }
 
-func NewMongoReader(uri string) *MongoReader {
-	return &MongoReader{uri: uri}
+func NewMongoReader(uri string, bk *parser.Bookmark) *MongoReader {
+	return &MongoReader{uri: uri, bk: bk}
 }
 
 func (mr *MongoReader) Read(ctx context.Context, config *config.Config,
@@ -67,26 +66,16 @@ func (mr *MongoReader) Read(ctx context.Context, config *config.Config,
 
 		return
 	}
-
-	bk, err := bookmark.Load("bookmark.json")
-	if err != nil {
-		if err != io.EOF {
-			errors.SendWarn(errChan, fmt.Errorf("couldn't decode timestamp json into bookmark struct: %s", err))
-		} else {
-			logx.Info("Empty file")
-		}
-	}
-
 	var startTs bson.Timestamp
 
-	if bk.LastTS.T == 0 {
+	if mr.bk.LastTS.T == 0 {
 		startTs, err = ReadOplogLatest(client)
 		if err != nil {
 			errors.SendWarn(errChan, fmt.Errorf("error getting latest Ts from oplog -> %v", err))
 		}
 
 	} else {
-		startTs.T, startTs.I = uint32(bk.LastTS.T), uint32(bk.LastTS.I)
+		startTs.T, startTs.I = uint32(mr.bk.LastTS.T), uint32(mr.bk.LastTS.I)
 	}
 
 	cursor, err := OpenTailableCursor(ctx, client, startTs)
@@ -96,7 +85,7 @@ func (mr *MongoReader) Read(ctx context.Context, config *config.Config,
 
 	defer cursor.Close(ctx)
 
-	err = ProcessOplogs(ctx, cursor, p, config, oplogChan, bk)
+	err = ProcessOplogs(ctx, cursor, p, config, oplogChan)
 	if err != nil {
 		errors.SendWarn(errChan, fmt.Errorf("oplog processing failed: %w", err))
 	}
@@ -148,7 +137,7 @@ func OpenTailableCursor(ctx context.Context, client *mongo.Client, startTs bson.
 }
 
 func ProcessOplogs(ctx context.Context, cursor *mongo.Cursor, p parser.Parser, config *config.Config,
-	oplogChan chan<- parser.Oplog, savedBookmark parser.Bookmark) error {
+	oplogChan chan<- parser.Oplog) error {
 
 	for {
 		select {

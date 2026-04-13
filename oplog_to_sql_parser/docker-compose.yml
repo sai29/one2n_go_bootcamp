@@ -1,0 +1,79 @@
+services:
+  mongo:
+    image: mongo:7
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--quiet"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--host", "127.0.0.1", "--port", "27017", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+  
+  mongo-init:
+    image: mongo:7
+    depends_on:
+      mongo:
+        condition: service_healthy
+    command: >
+      mongosh --host mongo --quiet --eval
+      '
+        try { rs.status(); } catch (e) {
+          rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "mongo:27017"}]});
+        }
+        let attempts = 0;
+        while (db.adminCommand({ isMaster: 1 }).ismaster !== true) {
+          if (++attempts > 20) { print("Timed out waiting for PRIMARY"); quit(1); }
+          sleep(500)
+        }
+        print("Replica set PRIMARY is ready.");
+      '
+  
+  postgres:
+    image: postgres:17
+    command: ["postgres", "-c", "log_min_messages=warning"]
+    environment:
+      POSTGRES_USER: oplog_replica
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: oplog_replica
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "oplog_replica", "-d", "oplog_replica"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+  
+  parser:
+    build: .
+    entrypoint: ["/app/oplog-parser"]
+    working_dir: /app/data
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    # --- File mode ---
+    volumes:
+      - ./data:/app/data
+    command:
+      - "--input-file"
+      - "oplog.json"
+      - "--output-file"
+      - "output.sql"
+    # --- Stream mode ---
+    # command:
+    #   - "--input-uri"
+    #   - "mongodb://mongo:27017/?replicaSet=rs0&directConnection=true"
+    #   - "--output-uri"
+    #   - "postgres://oplog_replica:password@postgres:5432/oplog_replica?sslmode=disable"
+
+volumes:
+  mongo_data:
+  postgres_data:

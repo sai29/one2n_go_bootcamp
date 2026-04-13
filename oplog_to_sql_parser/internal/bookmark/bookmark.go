@@ -11,14 +11,6 @@ import (
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
 )
 
-type Bookmark struct {
-	LastTS struct {
-		T int `json:"T"`
-		I int `json:"I"`
-	} `json:"last_ts"`
-	LastNamespace string `json:"last_namespace"`
-}
-
 func Load(path string) (parser.Bookmark, error) {
 	tsFile, err := os.OpenFile(path, os.O_RDONLY, 0644)
 	if err != nil {
@@ -40,7 +32,9 @@ func Load(path string) (parser.Bookmark, error) {
 
 }
 
-func BookmarkWorker(ctx context.Context, bookmarkChan chan map[string]int, errChan chan errors.AppError) {
+func BookmarkWorker(ctx context.Context, bookmarkChan chan map[string]int, errChan chan errors.AppError, lastSavedBk *parser.Bookmark) {
+	runningMaxT := lastSavedBk.LastTS.T
+	runningMaxI := lastSavedBk.LastTS.I
 	for {
 		select {
 		case <-ctx.Done():
@@ -50,17 +44,20 @@ func BookmarkWorker(ctx context.Context, bookmarkChan chan map[string]int, errCh
 				logx.Info("Bookmark worker returning after bookmarkChan closed.")
 				return
 			}
-
-			if err := SaveBookmark("bookmark.json", bk["currentT"], bk["currentI"]); err != nil {
-				logx.Error("error saving bookmark timestamp -> %s", err)
-				errors.SendWarn(errChan, fmt.Errorf("error saving bookmark timestamp -> %s", err))
-			} else {
-				logx.Info("Saved bookmark successfuly -> %v", bk)
+			if OplogAfterBookmark(runningMaxT, runningMaxI, bk["currentT"], bk["currentI"]) {
+				logx.Info("Current runningMaxT and currentT is %v %v", runningMaxT, bk["currentT"])
+				if err := SaveBookmark("data/bookmark.json", bk["currentT"], bk["currentI"]); err != nil {
+					logx.Error("error saving bookmark timestamp -> %s", err)
+					errors.SendWarn(errChan, fmt.Errorf("error saving bookmark timestamp -> %s", err))
+				} else {
+					runningMaxT = bk["currentT"]
+					runningMaxI = bk["currentI"]
+					logx.Info("Saved bookmark successfuly -> %v", bk)
+				}
 			}
 
 		}
 	}
-
 }
 
 func SaveBookmark(path string, t int, i int) error {
@@ -79,7 +76,7 @@ func SaveBookmark(path string, t int, i int) error {
 		return fmt.Errorf("failed to wrtie temp file: %s", err)
 	}
 	if err := os.Rename(tempPath, path); err != nil {
-		return fmt.Errorf("faile to rename temp file: %s", err)
+		return fmt.Errorf("failed to rename temp file: %s", err)
 	}
 	return nil
 }

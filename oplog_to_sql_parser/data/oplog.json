@@ -10,7 +10,7 @@
                 "Data": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="
             }
         },
-        "ns": "student.students",
+        "ns": "student.students", 
         "o": {
             "_id": "64798c213f273a7ca2cf516a",
             "age": 25,
