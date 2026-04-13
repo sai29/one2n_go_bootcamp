@@ -53,7 +53,6 @@ services:
   parser:
     build: .
     entrypoint: ["/app/oplog-parser"]
-    working_dir: /app/data
     depends_on:
       mongo-init:
         condition: service_completed_successfully
@@ -64,9 +63,9 @@ services:
       - ./data:/app/data
     command:
       - "--input-file"
-      - "oplog.json"
+      - "data/oplog.json"
       - "--output-file"
-      - "output.sql"
+      - "data/output.sql"
     # --- Stream mode ---
     # command:
     #   - "--input-uri"

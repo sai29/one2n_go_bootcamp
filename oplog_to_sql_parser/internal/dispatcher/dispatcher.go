@@ -115,7 +115,7 @@ func (dbW *dbWorker) processDB(ctx context.Context, errChan chan<- errors.AppErr
 			if _, exists := dbW.collectionChans[collection]; !exists {
 				collectionChan := make(chan parser.Oplog, 100)
 				dbW.collectionChans[collection] = collectionChan
-				fmt.Printf("%#v\n", dbW)
+				// fmt.Printf("%#v\n", dbW)
 				dbW.collectionWg.Add(1)
 				wg.Add(1)
 				logx.Info("Calling Collections worker")

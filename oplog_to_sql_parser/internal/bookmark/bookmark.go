@@ -11,6 +11,8 @@ import (
 	"github.com/sai29/one2n_go_bootcamp/oplog_to_sql_parser/internal/parser"
 )
 
+const DefaultBookmarkPath = "data/bookmark.json"
+
 func Load(path string) (parser.Bookmark, error) {
 	tsFile, err := os.OpenFile(path, os.O_RDONLY, 0644)
 	if err != nil {
@@ -46,7 +48,7 @@ func BookmarkWorker(ctx context.Context, bookmarkChan chan map[string]int, errCh
 			}
 			if OplogAfterBookmark(runningMaxT, runningMaxI, bk["currentT"], bk["currentI"]) {
 				logx.Info("Current runningMaxT and currentT is %v %v", runningMaxT, bk["currentT"])
-				if err := SaveBookmark("data/bookmark.json", bk["currentT"], bk["currentI"]); err != nil {
+				if err := SaveBookmark(DefaultBookmarkPath, bk["currentT"], bk["currentI"]); err != nil {
 					logx.Error("error saving bookmark timestamp -> %s", err)
 					errors.SendWarn(errChan, fmt.Errorf("error saving bookmark timestamp -> %s", err))
 				} else {

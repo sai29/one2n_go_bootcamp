@@ -71,7 +71,7 @@ func oplogToSql(ctx context.Context) error {
 	sqlChan := make(chan input.SqlStatement, 100)
 	errChan := make(chan errors.AppError, 10)
 
-	lastSavedBk, err := bookmark.Load("data/bookmark.json")
+	lastSavedBk, err := bookmark.Load(bookmark.DefaultBookmarkPath)
 	if err != nil {
 		if err != io.EOF {
 			errors.SendWarn(errChan, fmt.Errorf("couldn't decode timestamp json into bookmark struct: %s", err))
